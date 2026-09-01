@@ -228,6 +228,12 @@ function frameMarkup(style: QRStyle, qrWidth: number, qrHeight: number): { reado
   return { extraHeight, markup: `${rect}${text}` };
 }
 
+function sanitizeLogoDataUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+$/.test(trimmed) ? trimmed : null;
+}
+
 export function renderQR(payload: string, style: QRStyle = DEFAULT_STYLE, targetWidth = 640): RenderedQR {
   const matrix = encodeMatrix(payload, style.errorCorrection);
   const normalizedTargetWidth = Number(targetWidth);
@@ -279,13 +285,14 @@ export function renderQR(payload: string, style: QRStyle = DEFAULT_STYLE, target
   }).join('');
 
   let logo = '';
-  if (style.logo.dataUrl) {
+  const safeLogoDataUrl = sanitizeLogoDataUrl(style.logo.dataUrl);
+  if (safeLogoDataUrl) {
     const logoSize = qrWidth * Math.min(style.logo.size, 0.26);
     const box = logoSize + style.logo.padding * 2;
     const x = (qrWidth - box) / 2;
     const y = (qrHeight - box) / 2;
     const radius = Math.min(box / 2, style.logo.radius);
-    logo = `<g><rect x="${x}" y="${y}" width="${box}" height="${box}" rx="${radius}" fill="${esc(style.logo.background)}" stroke="${esc(style.logo.borderColor)}" stroke-width="${style.logo.borderWidth}"/><image href="${esc(style.logo.dataUrl)}" x="${x + style.logo.padding}" y="${y + style.logo.padding}" width="${logoSize}" height="${logoSize}" preserveAspectRatio="xMidYMid meet"/></g>`;
+    logo = `<g><rect x="${x}" y="${y}" width="${box}" height="${box}" rx="${radius}" fill="${esc(style.logo.background)}" stroke="${esc(style.logo.borderColor)}" stroke-width="${style.logo.borderWidth}"/><image href="${esc(safeLogoDataUrl)}" x="${x + style.logo.padding}" y="${y + style.logo.padding}" width="${logoSize}" height="${logoSize}" preserveAspectRatio="xMidYMid meet"/></g>`;
   }
 
   const defs = `${modulesPaint.defs}${bgPaint.defs}`;
