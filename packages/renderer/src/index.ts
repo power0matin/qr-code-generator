@@ -230,9 +230,11 @@ function frameMarkup(style: QRStyle, qrWidth: number, qrHeight: number): { reado
 
 export function renderQR(payload: string, style: QRStyle = DEFAULT_STYLE, targetWidth = 640): RenderedQR {
   const matrix = encodeMatrix(payload, style.errorCorrection);
-  const modulePixels = targetWidth / (matrix.size + style.quietZone * 2);
-  const qrWidth = targetWidth;
-  const qrHeight = targetWidth;
+  const normalizedTargetWidth = Number(targetWidth);
+  const safeTargetWidth = Number.isFinite(normalizedTargetWidth) && normalizedTargetWidth > 0 ? normalizedTargetWidth : 640;
+  const modulePixels = safeTargetWidth / (matrix.size + style.quietZone * 2);
+  const qrWidth = safeTargetWidth;
+  const qrHeight = safeTargetWidth;
   const quiet = style.quietZone * modulePixels;
   const modulesPaint = modulePaint(style);
   const bgPaint = backgroundPaint(style);
