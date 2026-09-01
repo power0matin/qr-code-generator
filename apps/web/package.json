@@ -1,0 +1,45 @@
+{
+  "name": "@moduqr/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:a11y": "playwright test --grep @a11y"
+  },
+  "dependencies": {
+    "@moduqr/core": "workspace:*",
+    "@moduqr/presets": "workspace:*",
+    "@moduqr/renderer": "workspace:*",
+    "@moduqr/scan-validator": "workspace:*",
+    "@moduqr/shared": "workspace:*",
+    "jspdf": "4.2.1",
+    "lucide-react": "1.33.0",
+    "next": "16.3.3",
+    "qr": "0.6.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "react-hook-form": "7.87.0",
+    "zod": "4.5.4",
+    "zustand": "5.0.15"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "24.3.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "eslint": "9.34.0",
+    "eslint-config-next": "16.3.3",
+    "jsdom": "26.1.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.8.3",
+    "vitest": "4.1.11"
+  }
+}

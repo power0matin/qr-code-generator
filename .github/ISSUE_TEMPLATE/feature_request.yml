@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest a focused product or developer-experience improvement.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: scanability
+    attributes:
+      label: Scanability / privacy implications
+      description: Explain whether this changes QR rendering, decoding, data handling, or external requests.
