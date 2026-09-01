@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ThemeToggle } from './theme-toggle';
 
 export function Header() {
-  const repositoryUrl = process.env.NEXT_PUBLIC_REPOSITORY_URL;
+  const repositoryUrl = process.env['NEXT_PUBLIC_REPOSITORY_URL'];
   return <header className="site-header">
     <div className="shell header-row">
       <Link className="brand" href="/" aria-label="ModuQR home"><span className="brand-mark">M</span><span>ModuQR</span></Link>

@@ -13,9 +13,6 @@ export function ProjectsView() {
   const [sort, setSort] = useState<'updated' | 'name'>('updated');
   const [status, setStatus] = useState('');
 
-  const refresh = async () => {
-    try { setProjects(await listProjects()); } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not load local projects.'); }
-  };
   const runAction = async (action: () => Promise<void>, success: string) => {
     try {
       await action();
@@ -25,7 +22,20 @@ export function ProjectsView() {
       setStatus(error instanceof Error ? error.message : 'The local project action failed.');
     }
   };
-  useEffect(() => { void refresh(); }, []);
+
+  useEffect(() => {
+    let active = true;
+    void listProjects()
+      .then((storedProjects) => {
+        if (active) setProjects(storedProjects);
+      })
+      .catch((error: unknown) => {
+        if (active) setStatus(error instanceof Error ? error.message : 'Could not load local projects.');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const visible = useMemo(() => {
     const filtered = projects.filter((project) => project.name.toLowerCase().includes(query.toLowerCase()) || project.payload.toLowerCase().includes(query.toLowerCase()));

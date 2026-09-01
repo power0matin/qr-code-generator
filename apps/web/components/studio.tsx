@@ -6,7 +6,7 @@ import { renderQR } from '@moduqr/renderer';
 import { evaluateSafety } from '@moduqr/scan-validator';
 import { DESIGN_SCHEMA_VERSION, type QRDesignDocument } from '@moduqr/shared';
 import { Download, FileDown, Redo2, RotateCcw, Save, Sparkles, Undo2, Upload } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DesignPanel } from './design-panel';
 import { PayloadEditor } from './payload-editor';
 import { exportQR, verifyRenderedSvg, type ExportFormat } from '@/lib/export';
@@ -26,7 +26,8 @@ export function Studio() {
   const setStyle = useStudioStore((state) => state.setStyle);
   const load = useStudioStore((state) => state.load);
   const rendered = useMemo(() => renderQR(payload || ' ', style), [payload, style]);
-  const [decoded, setDecoded] = useState<boolean | null>(null);
+  const [decodeSnapshot, setDecodeSnapshot] = useState<{ readonly svg: string; readonly payload: string; readonly result: boolean } | null>(null);
+  const decoded = decodeSnapshot?.svg === rendered.svg && decodeSnapshot.payload === payload ? decodeSnapshot.result : null;
   const [status, setStatus] = useState('');
   const [format, setFormat] = useState<ExportFormat>('png');
   const [width, setWidth] = useState(1024);
@@ -39,40 +40,46 @@ export function Studio() {
     const stored = sessionStorage.getItem('moduqr-load-project');
     if (!stored) return;
     sessionStorage.removeItem('moduqr-load-project');
-    try {
-      const project = parseDesignDocument(JSON.parse(stored) as unknown);
-      setProjectName(project.name);
-      setActiveProject({ id: project.id, createdAt: project.createdAt });
-      load({ payloadType: project.payloadType, payload: project.payload, style: project.style, presetId: project.presetId });
-      setStatus('Local project loaded.');
-    } catch {
-      setStatus('The selected local project could not be loaded.');
-    }
+
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      try {
+        const project = parseDesignDocument(JSON.parse(stored) as unknown);
+        setProjectName(project.name);
+        setActiveProject({ id: project.id, createdAt: project.createdAt });
+        load({ payloadType: project.payloadType, payload: project.payload, style: project.style, presetId: project.presetId });
+        setStatus('Local project loaded.');
+      } catch {
+        setStatus('The selected local project could not be loaded.');
+      }
+    });
+
+    return () => {
+      active = false;
+    };
   }, [load]);
 
   useEffect(() => {
     let active = true;
-    setDecoded(null);
+    const svg = rendered.svg;
+    const currentPayload = payload;
     const timer = setTimeout(() => {
-      void verifyRenderedSvg(rendered.svg, payload, 768).then((result) => { if (active) setDecoded(result); }).catch(() => { if (active) setDecoded(false); });
+      void verifyRenderedSvg(svg, currentPayload, 768)
+        .then((result) => {
+          if (active) setDecodeSnapshot({ svg, payload: currentPayload, result });
+        })
+        .catch(() => {
+          if (active) setDecodeSnapshot({ svg, payload: currentPayload, result: false });
+        });
     }, 220);
-    return () => { active = false; clearTimeout(timer); };
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [rendered.svg, payload]);
 
   const safety = useMemo(() => evaluateSafety({ payload, style, outputWidth: width, decoded }), [payload, style, width, decoded]);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const typing = target?.matches('input,textarea,select,[contenteditable=true]') ?? false;
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) { event.preventDefault(); undo(); }
-      if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === 'y' || (event.shiftKey && event.key.toLowerCase() === 'z'))) { event.preventDefault(); redo(); }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void saveCurrent(); }
-      if (!typing && event.key.toLowerCase() === 'r' && event.altKey) { event.preventDefault(); surprise(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
 
   const currentDocument = (): QRDesignDocument => {
     const now = new Date().toISOString();
@@ -90,7 +97,7 @@ export function Studio() {
     };
   };
 
-  const saveCurrent = async () => {
+  const saveCurrent = useCallback(async () => {
     try {
       const now = new Date().toISOString();
       const project = activeProject ? { version: DESIGN_SCHEMA_VERSION, id: activeProject.id, name: projectName.trim() || 'Untitled QR', payloadType, payload, style, presetId, favorite: false, createdAt: activeProject.createdAt, updatedAt: now } satisfies QRDesignDocument : makeProject({ name: projectName.trim() || 'Untitled QR', payloadType, payload, style, presetId, favorite: false });
@@ -100,7 +107,7 @@ export function Studio() {
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Could not save this project.');
     }
-  };
+  }, [activeProject, payload, payloadType, presetId, projectName, style]);
 
   const exportDesignJson = () => {
     const blob = new Blob([JSON.stringify(currentDocument(), null, 2)], { type: 'application/json' });
@@ -128,11 +135,24 @@ export function Studio() {
     }
   };
 
-  const surprise = () => {
+  const surprise = useCallback(() => {
     const seed = [...payload].reduce((sum, char) => (sum + char.charCodeAt(0)) % 100003, 0) + Date.now();
     const selected = PRESETS[seed % PRESETS.length];
     if (selected) setStyle(selected.style, selected.id);
-  };
+  }, [payload, setStyle]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = target?.matches('input,textarea,select,[contenteditable=true]') ?? false;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) { event.preventDefault(); undo(); }
+      if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === 'y' || (event.shiftKey && event.key.toLowerCase() === 'z'))) { event.preventDefault(); redo(); }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void saveCurrent(); }
+      if (!typing && event.key.toLowerCase() === 'r' && event.altKey) { event.preventDefault(); surprise(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [redo, saveCurrent, surprise, undo]);
 
   const doExport = async () => {
     try {
@@ -147,16 +167,16 @@ export function Studio() {
   return <section className="studio-shell" aria-label="QR code designer">
     <div className="studio-toolbar">
       <div className="title-group"><h1>QR Studio</h1><p>{payloadType.toUpperCase()} · local-only static QR</p></div>
-      <button type="button" className="button ghost" onClick={undo} disabled={past.length === 0} title="Undo (Ctrl/⌘ Z)"><Undo2 size={16}/><span>Undo</span></button>
-      <button type="button" className="button ghost" onClick={redo} disabled={future.length === 0} title="Redo"><Redo2 size={16}/><span>Redo</span></button>
-      <button type="button" className="button ghost" onClick={surprise} title="Surprise me (Alt R)"><Sparkles size={16}/><span>Surprise</span></button>
-      <button type="button" className="button ghost" onClick={reset}><RotateCcw size={16}/><span>Reset</span></button>
+      <button type="button" className="button ghost" onClick={undo} disabled={past.length === 0} aria-label="Undo design" title="Undo (Ctrl/⌘ Z)"><Undo2 size={16}/><span>Undo</span></button>
+      <button type="button" className="button ghost" onClick={redo} disabled={future.length === 0} aria-label="Redo design" title="Redo"><Redo2 size={16}/><span>Redo</span></button>
+      <button type="button" className="button ghost" onClick={surprise} aria-label="Surprise me" title="Surprise me (Alt R)"><Sparkles size={16}/><span>Surprise</span></button>
+      <button type="button" className="button ghost" onClick={reset} aria-label="Reset design" title="Reset design"><RotateCcw size={16}/><span>Reset</span></button>
     </div>
     <div className="studio-grid">
       <aside className="panel"><div className="panel-scroll"><PayloadEditor /></div></aside>
       <section className="panel canvas-panel" aria-label="Live QR preview">
         <div className="canvas-stage"><div className="qr-paper" dangerouslySetInnerHTML={{ __html: rendered.svg }}/></div>
-        <div className="canvas-meta"><small>Version {Math.floor((rendered.matrixSize - 17) / 4)} · {rendered.matrixSize}×{rendered.matrixSize} modules</small><span className="score-pill">{decoded === null ? 'Checking…' : decoded ? '✓ Decodes' : 'Decode failed'}</span></div>
+        <div className="canvas-meta"><small>Version {Math.floor((rendered.matrixSize - 17) / 4)} · {rendered.matrixSize}×{rendered.matrixSize} modules</small><span className="score-pill" aria-label="Decode status" aria-live="polite">{decoded === null ? 'Checking…' : decoded ? '✓ Decodes' : 'Decode failed'}</span></div>
       </section>
       <aside className="panel"><div className="panel-scroll"><DesignPanel /><div className="divider"/><Safety score={safety.score} grade={safety.grade} issues={safety.issues}/><div className="divider"/><ExportPanel format={format} setFormat={setFormat} width={width} setWidth={setWidth} transparent={transparent} setTransparent={setTransparent} projectName={projectName} setProjectName={setProjectName} onExport={() => void doExport()} onSave={() => void saveCurrent()} onExportJson={exportDesignJson} onImport={() => importRef.current?.click()} status={status}/><input ref={importRef} hidden type="file" accept="application/json,.json" onChange={(event) => void importDesign(event.target.files?.[0])}/></div></aside>
     </div>

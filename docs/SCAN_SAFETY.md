@@ -1,13 +1,14 @@
 # Scan Safety model
 
-The Phase 1 score is a deterministic advisory signal. It is not a certification and must not be presented as a guarantee that every physical print will scan.
+The current score is a deterministic advisory signal. It is not a certification and must not be presented as a guarantee that every physical print will scan.
 
 ## Inputs
 
 The evaluator currently considers:
 
 - foreground/background luminance contrast
-- weakest gradient-stop contrast
+- weakest module/background gradient-stop contrast across multi-stop gradients
+- independently customized finder color contrast
 - quiet-zone width in modules
 - encoded QR version/density
 - module size at the requested output width
@@ -23,4 +24,4 @@ Preview and export use the same SVG renderer. Before a download, ModuQR rasteriz
 
 ## Limits
 
-Phase 1 does not yet simulate printer dot gain, perspective distortion, blur, rotation, low-light camera noise, paper reflectivity or real viewing distance. Those multi-condition checks belong to Safety v2 in Phase 2.
+The Phase 2 foundation now understands advanced module/background gradients and independent finder colors, but it does not yet simulate printer dot gain, perspective distortion, blur, rotation, low-light camera noise, paper reflectivity, or real viewing distance. Those multi-condition decode simulations are the next Safety v2 milestone.

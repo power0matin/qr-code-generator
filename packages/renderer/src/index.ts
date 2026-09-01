@@ -1,13 +1,34 @@
 import { encodeMatrix } from '@moduqr/core';
-import type { FinderShape, ModuleShape, QRStyle, RenderedQR } from '@moduqr/shared';
+import type {
+  FinderOverride,
+  FinderPosition,
+  FinderShape,
+  GradientDefinition,
+  ModuleShape,
+  QRStyle,
+  RenderedQR,
+} from '@moduqr/shared';
+
+const EMPTY_FINDER_OVERRIDE: FinderOverride = {
+  outerShape: null,
+  innerShape: null,
+  outerColor: null,
+  innerColor: null,
+};
 
 export const DEFAULT_STYLE: QRStyle = {
   moduleShape: 'rounded',
   finderOuterShape: 'rounded',
   finderInnerShape: 'circle',
+  finderOverrides: {
+    topLeft: EMPTY_FINDER_OVERRIDE,
+    topRight: EMPTY_FINDER_OVERRIDE,
+    bottomLeft: EMPTY_FINDER_OVERRIDE,
+  },
   foreground: '#111827',
   background: '#ffffff',
   gradient: null,
+  backgroundGradient: null,
   quietZone: 4,
   moduleGap: 0.08,
   errorCorrection: 'M',
@@ -24,6 +45,20 @@ export const DEFAULT_STYLE: QRStyle = {
   },
   frame: { style: 'none', text: 'Scan me', fontSize: 18, fontWeight: 600, padding: 24 },
 };
+
+interface Neighbors {
+  readonly top: boolean;
+  readonly right: boolean;
+  readonly bottom: boolean;
+  readonly left: boolean;
+}
+
+interface ResolvedFinderStyle {
+  readonly outerShape: FinderShape;
+  readonly innerShape: FinderShape;
+  readonly outerFill: string;
+  readonly innerFill: string;
+}
 
 function esc(value: string): string {
   return value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char] ?? char);
@@ -42,7 +77,71 @@ function isLogoCutout(x: number, y: number, n: number, style: QRStyle): boolean 
   return x >= from && x < to && y >= from && y < to;
 }
 
-function moduleElement(shape: ModuleShape, x: number, y: number, size: number, gap: number, fill: string): string {
+function roundedRectPath(
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+  radii: Readonly<{ tl: number; tr: number; br: number; bl: number }>,
+): string {
+  const width = Math.max(0.01, right - left);
+  const height = Math.max(0.01, bottom - top);
+  const maxRadius = Math.min(width, height) / 2;
+  const tl = Math.min(radii.tl, maxRadius);
+  const tr = Math.min(radii.tr, maxRadius);
+  const br = Math.min(radii.br, maxRadius);
+  const bl = Math.min(radii.bl, maxRadius);
+  return [
+    `M ${left + tl} ${top}`,
+    `H ${right - tr}`,
+    tr > 0 ? `Q ${right} ${top} ${right} ${top + tr}` : `L ${right} ${top}`,
+    `V ${bottom - br}`,
+    br > 0 ? `Q ${right} ${bottom} ${right - br} ${bottom}` : `L ${right} ${bottom}`,
+    `H ${left + bl}`,
+    bl > 0 ? `Q ${left} ${bottom} ${left} ${bottom - bl}` : `L ${left} ${bottom}`,
+    `V ${top + tl}`,
+    tl > 0 ? `Q ${left} ${top} ${left + tl} ${top}` : `L ${left} ${top}`,
+    'Z',
+  ].join(' ');
+}
+
+function connectedModuleElement(
+  shape: 'connected' | 'fluid',
+  x: number,
+  y: number,
+  size: number,
+  gap: number,
+  fill: string,
+  neighbors: Neighbors,
+): string {
+  const inset = (gap * size) / 2;
+  const left = neighbors.left ? x : x + inset;
+  const right = neighbors.right ? x + size : x + size - inset;
+  const top = neighbors.top ? y : y + inset;
+  const bottom = neighbors.bottom ? y + size : y + size - inset;
+  const radius = size * (shape === 'fluid' ? 0.46 : 0.28);
+  const path = roundedRectPath(left, top, right, bottom, {
+    tl: !neighbors.top && !neighbors.left ? radius : 0,
+    tr: !neighbors.top && !neighbors.right ? radius : 0,
+    br: !neighbors.bottom && !neighbors.right ? radius : 0,
+    bl: !neighbors.bottom && !neighbors.left ? radius : 0,
+  });
+  return `<path d="${path}" fill="${fill}"/>`;
+}
+
+function moduleElement(
+  shape: ModuleShape,
+  x: number,
+  y: number,
+  size: number,
+  gap: number,
+  fill: string,
+  neighbors: Neighbors,
+): string {
+  if (shape === 'connected' || shape === 'fluid') {
+    return connectedModuleElement(shape, x, y, size, gap, fill, neighbors);
+  }
+
   const inset = (gap * size) / 2;
   const s = Math.max(0.01, size - inset * 2);
   const px = x + inset;
@@ -84,16 +183,36 @@ function finderPupil(shape: FinderShape, x: number, y: number, size: number, fil
   return `<rect x="${x + inset}" y="${y + inset}" width="${pupil}" height="${pupil}" rx="${shape === 'rounded' ? pupil * 0.25 : 0}" fill="${fill}"/>`;
 }
 
-function gradientMarkup(style: QRStyle): { readonly defs: string; readonly fill: string } {
-  if (!style.gradient) return { defs: '', fill: esc(style.foreground) };
-  const stops = style.gradient.stops.map((stop) => `<stop offset="${Math.round(stop.offset * 100)}%" stop-color="${esc(stop.color)}"/>`).join('');
-  if (style.gradient.type === 'radial') {
-    return { defs: `<radialGradient id="moduqr-gradient" cx="50%" cy="50%" r="70%">${stops}</radialGradient>`, fill: 'url(#moduqr-gradient)' };
+function gradientDefinitionMarkup(id: string, gradient: GradientDefinition): string {
+  const sortedStops = [...gradient.stops].sort((a, b) => a.offset - b.offset);
+  const stops = sortedStops.map((stop) => `<stop offset="${Math.round(stop.offset * 100)}%" stop-color="${esc(stop.color)}"/>`).join('');
+  if (gradient.type === 'radial') {
+    return `<radialGradient id="${id}" cx="50%" cy="50%" r="70%">${stops}</radialGradient>`;
   }
-  const radians = (style.gradient.angle * Math.PI) / 180;
+  const radians = (gradient.angle * Math.PI) / 180;
   const x = Math.cos(radians) * 50;
   const y = Math.sin(radians) * 50;
-  return { defs: `<linearGradient id="moduqr-gradient" x1="${50 - x}%" y1="${50 - y}%" x2="${50 + x}%" y2="${50 + y}%">${stops}</linearGradient>`, fill: 'url(#moduqr-gradient)' };
+  return `<linearGradient id="${id}" x1="${50 - x}%" y1="${50 - y}%" x2="${50 + x}%" y2="${50 + y}%">${stops}</linearGradient>`;
+}
+
+function modulePaint(style: QRStyle): { readonly defs: string; readonly fill: string } {
+  if (!style.gradient) return { defs: '', fill: esc(style.foreground) };
+  return { defs: gradientDefinitionMarkup('moduqr-module-gradient', style.gradient), fill: 'url(#moduqr-module-gradient)' };
+}
+
+function backgroundPaint(style: QRStyle): { readonly defs: string; readonly fill: string } {
+  if (!style.backgroundGradient) return { defs: '', fill: esc(style.background) };
+  return { defs: gradientDefinitionMarkup('moduqr-background-gradient', style.backgroundGradient), fill: 'url(#moduqr-background-gradient)' };
+}
+
+function resolveFinderStyle(style: QRStyle, position: FinderPosition, defaultFill: string): ResolvedFinderStyle {
+  const override = style.finderOverrides[position];
+  return {
+    outerShape: override.outerShape ?? style.finderOuterShape,
+    innerShape: override.innerShape ?? style.finderInnerShape,
+    outerFill: override.outerColor ? esc(override.outerColor) : defaultFill,
+    innerFill: override.innerColor ? esc(override.innerColor) : defaultFill,
+  };
 }
 
 function frameMarkup(style: QRStyle, qrWidth: number, qrHeight: number): { readonly extraHeight: number; readonly markup: string } {
@@ -115,26 +234,46 @@ export function renderQR(payload: string, style: QRStyle = DEFAULT_STYLE, target
   const qrWidth = targetWidth;
   const qrHeight = targetWidth;
   const quiet = style.quietZone * modulePixels;
-  const gradient = gradientMarkup(style);
+  const modulesPaint = modulePaint(style);
+  const bgPaint = backgroundPaint(style);
   const frame = frameMarkup(style, qrWidth, qrHeight);
   const totalHeight = qrHeight + frame.extraHeight;
   const modules: string[] = [];
+
+  const isRenderableDark = (x: number, y: number): boolean => {
+    if (x < 0 || y < 0 || x >= matrix.size || y >= matrix.size) return false;
+    const row = matrix.modules[y];
+    return Boolean(row?.[x]) && !isFinderCell(x, y, matrix.size) && !isLogoCutout(x, y, matrix.size, style);
+  };
 
   for (let y = 0; y < matrix.size; y += 1) {
     const row = matrix.modules[y];
     if (!row) continue;
     for (let x = 0; x < matrix.size; x += 1) {
       if (!row[x] || isFinderCell(x, y, matrix.size) || isLogoCutout(x, y, matrix.size, style)) continue;
-      modules.push(moduleElement(style.moduleShape, quiet + x * modulePixels, quiet + y * modulePixels, modulePixels, style.moduleGap, gradient.fill));
+      const neighbors: Neighbors = {
+        top: isRenderableDark(x, y - 1),
+        right: isRenderableDark(x + 1, y),
+        bottom: isRenderableDark(x, y + 1),
+        left: isRenderableDark(x - 1, y),
+      };
+      modules.push(moduleElement(style.moduleShape, quiet + x * modulePixels, quiet + y * modulePixels, modulePixels, style.moduleGap, modulesPaint.fill, neighbors));
     }
   }
 
-  const finderOrigins: readonly [number, number][] = [[0, 0], [matrix.size - 7, 0], [0, matrix.size - 7]];
-  const eyes = finderOrigins.map(([x, y]) => {
+  const finderOrigins: readonly { readonly position: FinderPosition; readonly x: number; readonly y: number }[] = [
+    { position: 'topLeft', x: 0, y: 0 },
+    { position: 'topRight', x: matrix.size - 7, y: 0 },
+    { position: 'bottomLeft', x: 0, y: matrix.size - 7 },
+  ];
+  const eyes = finderOrigins.map(({ position, x, y }) => {
     const left = quiet + x * modulePixels;
     const top = quiet + y * modulePixels;
     const size = modulePixels * 7;
-    return `${finderShape(style.finderOuterShape, left, top, size, modulePixels, gradient.fill)}${finderPupil(style.finderInnerShape, left, top, size, gradient.fill)}`;
+    // Finder patterns stay solid by default even when modules use a gradient.
+    // This preserves their locator geometry and improves decoder reliability.
+    const finder = resolveFinderStyle(style, position, esc(style.foreground));
+    return `${finderShape(finder.outerShape, left, top, size, modulePixels, finder.outerFill)}${finderPupil(finder.innerShape, left, top, size, finder.innerFill)}`;
   }).join('');
 
   let logo = '';
@@ -147,6 +286,7 @@ export function renderQR(payload: string, style: QRStyle = DEFAULT_STYLE, target
     logo = `<g><rect x="${x}" y="${y}" width="${box}" height="${box}" rx="${radius}" fill="${esc(style.logo.background)}" stroke="${esc(style.logo.borderColor)}" stroke-width="${style.logo.borderWidth}"/><image href="${esc(style.logo.dataUrl)}" x="${x + style.logo.padding}" y="${y + style.logo.padding}" width="${logoSize}" height="${logoSize}" preserveAspectRatio="xMidYMid meet"/></g>`;
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${qrWidth}" height="${totalHeight}" viewBox="0 0 ${qrWidth} ${totalHeight}" role="img" aria-labelledby="moduqr-title moduqr-desc"><title id="moduqr-title">QR code</title><desc id="moduqr-desc">Generated locally by ModuQR</desc><defs>${gradient.defs}</defs><rect data-role="background" width="${qrWidth}" height="${totalHeight}" fill="${esc(style.background)}"/>${frame.markup}<g>${modules.join('')}${eyes}${logo}</g></svg>`;
+  const defs = `${modulesPaint.defs}${bgPaint.defs}`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${qrWidth}" height="${totalHeight}" viewBox="0 0 ${qrWidth} ${totalHeight}" role="img" aria-labelledby="moduqr-title moduqr-desc"><title id="moduqr-title">QR code</title><desc id="moduqr-desc">Generated locally by ModuQR</desc><defs>${defs}</defs><rect data-role="background" width="${qrWidth}" height="${totalHeight}" fill="${bgPaint.fill}"/>${frame.markup}<g>${modules.join('')}${eyes}${logo}</g></svg>`;
   return { svg, matrixSize: matrix.size, viewBoxWidth: qrWidth, viewBoxHeight: totalHeight, modulePixels };
 }

@@ -5,7 +5,7 @@ import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { OfflineStatus } from '@/components/offline-status';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+const siteUrl = process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3000';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -22,5 +22,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: [{ media: '(prefers-color-scheme: light)', color: '#f5f6f8' }, { media: '(prefers-color-scheme: dark)', color: '#0c0d10' }] };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" suppressHydrationWarning><body><a className="skip-link" href="#main">Skip to content</a><Script id="theme-bootstrap" strategy="beforeInteractive">{`try{const t=localStorage.getItem('moduqr-theme')||'system';const d=t==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):t;document.documentElement.dataset.theme=d}catch{}`}</Script><Header /><main id="main">{children}</main><Footer /><OfflineStatus /></body></html>;
+  return <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth"><body><a className="skip-link" href="#main">Skip to content</a><Script id="theme-bootstrap" strategy="beforeInteractive">{`try{const t=localStorage.getItem('moduqr-theme')||'system';const d=t==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):t;document.documentElement.dataset.theme=d}catch{}`}</Script><Header /><main id="main">{children}</main><Footer /><OfflineStatus /></body></html>;
 }

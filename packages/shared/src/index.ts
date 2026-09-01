@@ -1,4 +1,4 @@
-export const DESIGN_SCHEMA_VERSION = 1 as const;
+export const DESIGN_SCHEMA_VERSION = 2 as const;
 
 export type ErrorCorrectionLevel = 'L' | 'M' | 'Q' | 'H';
 export type ModuleShape =
@@ -9,8 +9,11 @@ export type ModuleShape =
   | 'circle'
   | 'diamond'
   | 'soft-square'
-  | 'pixel';
+  | 'pixel'
+  | 'connected'
+  | 'fluid';
 export type FinderShape = 'square' | 'rounded' | 'circle';
+export type FinderPosition = 'topLeft' | 'topRight' | 'bottomLeft';
 export type FrameStyle = 'none' | 'minimal' | 'rounded' | 'badge' | 'label' | 'sticker';
 export type GradientType = 'linear' | 'radial';
 export type PayloadType =
@@ -34,6 +37,19 @@ export interface GradientDefinition {
   readonly type: GradientType;
   readonly angle: number;
   readonly stops: readonly GradientStop[];
+}
+
+export interface FinderOverride {
+  readonly outerShape: FinderShape | null;
+  readonly innerShape: FinderShape | null;
+  readonly outerColor: string | null;
+  readonly innerColor: string | null;
+}
+
+export interface FinderOverrides {
+  readonly topLeft: FinderOverride;
+  readonly topRight: FinderOverride;
+  readonly bottomLeft: FinderOverride;
 }
 
 export interface LogoSettings {
@@ -60,9 +76,11 @@ export interface QRStyle {
   readonly moduleShape: ModuleShape;
   readonly finderOuterShape: FinderShape;
   readonly finderInnerShape: FinderShape;
+  readonly finderOverrides: FinderOverrides;
   readonly foreground: string;
   readonly background: string;
   readonly gradient: GradientDefinition | null;
+  readonly backgroundGradient: GradientDefinition | null;
   readonly quietZone: number;
   readonly moduleGap: number;
   readonly errorCorrection: ErrorCorrectionLevel;
@@ -99,6 +117,7 @@ export interface SafetyIssue {
     | 'SMALL_MODULES'
     | 'LOGO_OBSTRUCTION'
     | 'GRADIENT_CONTRAST'
+    | 'FINDER_CONTRAST'
     | 'SHAPE_RISK'
     | 'DECODE_FAILED';
   readonly severity: 'info' | 'warning' | 'error';

@@ -3,7 +3,7 @@
 import { detectPayloadType, parseStructuredPayload, serializePayload } from '@moduqr/core';
 import type { PayloadType } from '@moduqr/shared';
 import { WandSparkles } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useStudioStore } from '@/lib/studio-store';
 
@@ -106,7 +106,7 @@ export function PayloadEditor() {
     }
   };
 
-  const applyStructured = (value: string) => {
+  const applyStructured = useCallback((value: string) => {
     if (!value.trim()) return;
     try {
       const parsed = parseStructuredPayload(value);
@@ -118,24 +118,33 @@ export function PayloadEditor() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not parse this input.');
     }
-  };
+  }, [reset, setContent]);
 
   useEffect(() => {
     const redesign = sessionStorage.getItem('moduqr-redesign-payload');
-    if (redesign) {
-      sessionStorage.removeItem('moduqr-redesign-payload');
-      applyStructured(redesign);
-      return;
-    }
-    if (payload === lastWritten.current) return;
-    try {
-      const parsed = parseStructuredPayload(payload);
-      reset({ ...defaults, ...valuesForStructured(parsed.fields) });
-      lastWritten.current = payload;
-    } catch {
-      reset({ ...defaults, text: payload });
-    }
-  }, [payload, reset]);
+    if (redesign) sessionStorage.removeItem('moduqr-redesign-payload');
+    if (!redesign && payload === lastWritten.current) return;
+
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (redesign) {
+        applyStructured(redesign);
+        return;
+      }
+      try {
+        const parsed = parseStructuredPayload(payload);
+        reset({ ...defaults, ...valuesForStructured(parsed.fields) });
+        lastWritten.current = payload;
+      } catch {
+        reset({ ...defaults, text: payload });
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [applyStructured, payload, reset]);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -166,6 +175,6 @@ export function PayloadEditor() {
   </div>;
 }
 
-function Field({ label, error, children }: Readonly<{ label: string; error?: string; children: React.ReactNode }>) {
+function Field({ label, error, children }: Readonly<{ label: string; error?: string | undefined; children: React.ReactNode }>) {
   return <label className="field"><span className="field-label">{label}</span>{children}{error ? <span className="error">{error}</span> : null}</label>;
 }
