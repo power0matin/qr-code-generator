@@ -9,6 +9,14 @@ async function expectDecodable(page: Page): Promise<void> {
   await expect(status).toHaveText('✓ Decodes', { timeout: 15_000 });
 }
 
+async function qrMarkup(page: Page): Promise<string> {
+  return page.locator('.qr-paper svg').evaluate((element) => element.outerHTML);
+}
+
+async function expectQrToChange(page: Page, previousMarkup: string): Promise<void> {
+  await expect.poll(async () => (await qrMarkup(page)) !== previousMarkup, { timeout: 10_000 }).toBe(true);
+}
+
 test('studio renders and baseline QR decodes', async ({ page }) => {
   await page.goto('/generator');
   await expect(page.getByRole('heading', { name: 'QR Studio' })).toBeVisible();
@@ -36,10 +44,17 @@ test('Phase 1 payload types produce decodable previews', async ({ page }) => {
 test('smart input canonicalizes a detected email into an email QR payload', async ({ page }, testInfo) => {
   const file = path.join(testInfo.outputDir, 'smart-email.png');
   await page.goto('/generator');
+
+  const initialQr = await qrMarkup(page);
+
   await page.getByLabel('Smart input').fill('hello@example.com');
   await page.getByRole('button', { name: 'Detect & use' }).click();
   await expect(page.getByText('Email address detected.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Email', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Email', { exact: true })).toHaveValue('hello@example.com');
+  await expectQrToChange(page, initialQr);
   await expectDecodable(page);
+
   await page.locator('.qr-paper').screenshot({ path: file });
   await page.goto('/scanner');
   await page.locator('input[type=file]').setInputFiles(file);
@@ -196,11 +211,34 @@ test('saved WiFi project cards do not expose credentials', async ({ page }) => {
   const secret = 'top-secret-qr-password';
   const projectName = `wifi-privacy-${Date.now()}`;
   await page.goto('/generator');
-  await page.getByRole('button', { name: 'WiFi', exact: true }).click();
-  await page.getByLabel('Network name (SSID)').fill('Private Network');
-  await page.getByRole('combobox', { name: 'WiFi security', exact: true }).selectOption('WPA');
-  await page.getByLabel('WiFi password', { exact: true }).fill(secret);
+
+  const initialQr = await qrMarkup(page);
+
+  const wifiButton = page.getByRole('button', { name: 'WiFi', exact: true });
+  await wifiButton.click();
+  await expect(wifiButton).toHaveAttribute('aria-pressed', 'true');
+  await expectQrToChange(page, initialQr);
+
+  const ssidInput = page.getByLabel('Network name (SSID)');
+  const beforeSsid = await qrMarkup(page);
+  await ssidInput.fill('Private Network');
+  await expect(ssidInput).toHaveValue('Private Network');
+  await expectQrToChange(page, beforeSsid);
+
+  const securitySelect = page.getByRole('combobox', { name: 'WiFi security', exact: true });
+  await expect(securitySelect).toHaveValue('nopass');
+  await securitySelect.selectOption('WPA');
+  await expect(securitySelect).toHaveValue('WPA');
+
+  // WPA without a password is intentionally invalid, so the last valid QR may stay
+  // unchanged until the password is provided. Assert the next valid state instead.
+  const beforePassword = await qrMarkup(page);
+  const passwordInput = page.getByLabel('WiFi password', { exact: true });
+  await passwordInput.fill(secret);
+  await expect(passwordInput).toHaveValue(secret);
+  await expectQrToChange(page, beforePassword);
   await expectDecodable(page);
+
   await page.getByLabel('Project name').fill(projectName);
   await page.getByRole('button', { name: 'Save locally' }).click();
   await expect(page.getByText('Saved locally on this device.')).toBeVisible();
@@ -210,6 +248,16 @@ test('saved WiFi project cards do not expose credentials', async ({ page }) => {
   await expect(card).toBeVisible();
   await expect(card).toContainText('WiFi credentials hidden in the project list.');
   await expect(card).not.toContainText(secret);
+  await expect(page.locator('body')).not.toContainText(secret);
+
+  await card.getByRole('button', { name: 'Load' }).click();
+  await expect(page).toHaveURL(/\/generator$/);
+  await expect(page.getByText('Local project loaded.')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'WiFi', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Network name (SSID)')).toHaveValue('Private Network');
+  await expect(page.getByRole('combobox', { name: 'WiFi security', exact: true })).toHaveValue('WPA');
+  await expect(page.getByLabel('WiFi password', { exact: true })).toHaveValue(secret);
+  await expectDecodable(page);
 });
 
 test('saving a loaded favorite project preserves its favorite state', async ({ page }) => {

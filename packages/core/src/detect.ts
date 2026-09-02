@@ -131,12 +131,49 @@ function iCalDateToLocalInput(value: string): string {
   return raw;
 }
 
+
+function extractGeoLabel(qValue: string, latitudeRaw: string, longitudeRaw: string): string {
+  if (!qValue) return '';
+  const openParen = qValue.indexOf('(');
+  if (openParen >= 0 && qValue.endsWith(')')) return qValue.slice(openParen + 1, -1);
+  return qValue.startsWith(`${latitudeRaw},${longitudeRaw}`) ? '' : qValue;
+}
+
 function unfoldContentLines(value: string): string {
   return value.replace(/\r?\n[ \t]/g, '');
 }
 
 function unescapeICal(value: string): string {
   return value.replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1');
+}
+
+function contentLineValue(unfolded: string, property: string): string {
+  const expected = property.toUpperCase();
+  let start = 0;
+
+  while (start <= unfolded.length) {
+    const newline = unfolded.indexOf('\n', start);
+    const rawEnd = newline === -1 ? unfolded.length : newline;
+    const end = rawEnd > start && unfolded[rawEnd - 1] === '\r' ? rawEnd - 1 : rawEnd;
+    const line = unfolded.slice(start, end);
+    const separator = line.indexOf(':');
+
+    if (separator > 0) {
+      const header = line.slice(0, separator);
+      const parameterStart = header.indexOf(';');
+      const name = (parameterStart === -1 ? header : header.slice(0, parameterStart)).toUpperCase();
+      if (name === expected) return line.slice(separator + 1);
+    }
+
+    if (newline === -1) break;
+    start = newline + 1;
+  }
+
+  return '';
+}
+
+function unescapeVCard(value: string): string {
+  return value.replace(/\\n/gi, '\n').replace(/\\([;,\\])/g, '$1');
 }
 
 export interface ParsedStructuredPayload {
@@ -181,19 +218,19 @@ export function parseStructuredPayload(input: string): ParsedStructuredPayload {
       const latitude = Number(latitudeRaw);
       const longitude = Number(longitudeRaw);
       const qValue = new URLSearchParams(query).get('q') ?? '';
-      const labelMatch = qValue.match(/\((.*)\)$/);
-      const label = labelMatch?.[1] ?? (qValue && !qValue.startsWith(`${latitudeRaw},${longitudeRaw}`) ? qValue : '');
+      const label = extractGeoLabel(qValue, latitudeRaw, longitudeRaw);
       return { type: 'location', fields: { latitude, longitude, label } };
     }
     case 'vcard': {
       const unfolded = unfoldContentLines(value);
-      const field = (name: string): string => unfolded.match(new RegExp(`^${name}(?:;[^:]*)?:(.*)$`, 'im'))?.[1]?.replace(/\\n/gi, '\n').replace(/\\([;,\\])/g, '$1') ?? '';
+      const field = (name: string): string => unescapeVCard(contentLineValue(unfolded, name));
       const names = field('N').split(';');
       return { type: 'vcard', fields: { firstName: names[1] ?? '', lastName: names[0] ?? '', organization: field('ORG'), jobTitle: field('TITLE'), phone: field('TEL'), email: field('EMAIL'), website: field('URL') } };
     }
     case 'event': {
       const unfolded = unfoldContentLines(value);
-      return { type: 'event', fields: { title: unescapeICal(unfolded.match(/^SUMMARY:(.*)$/im)?.[1] ?? 'Event'), start: iCalDateToLocalInput(unfolded.match(/^DTSTART(?:;[^:]*)?:(.*)$/im)?.[1] ?? ''), end: iCalDateToLocalInput(unfolded.match(/^DTEND(?:;[^:]*)?:(.*)$/im)?.[1] ?? ''), location: unescapeICal(unfolded.match(/^LOCATION:(.*)$/im)?.[1] ?? ''), description: unescapeICal(unfolded.match(/^DESCRIPTION:(.*)$/im)?.[1] ?? '') } };
+      const field = (name: string): string => contentLineValue(unfolded, name);
+      return { type: 'event', fields: { title: unescapeICal(field('SUMMARY') || 'Event'), start: iCalDateToLocalInput(field('DTSTART')), end: iCalDateToLocalInput(field('DTEND')), location: unescapeICal(field('LOCATION')), description: unescapeICal(field('DESCRIPTION')) } };
     }
     case 'url':
       return { type: 'url', fields: { url: value } };

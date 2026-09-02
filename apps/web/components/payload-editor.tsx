@@ -75,6 +75,7 @@ export function PayloadEditor() {
   const { register, getValues, reset, formState: { errors } } = useForm<FormValues>({ defaultValues: defaults, mode: 'onChange' });
   const [smart, setSmart] = useState('');
   const [message, setMessage] = useState('');
+  const smartInputRef = useRef<HTMLTextAreaElement>(null);
   const lastWritten = useRef(payload);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -163,8 +164,8 @@ export function PayloadEditor() {
     <div className="panel-header"><div><h2>Content</h2><p>Everything is encoded locally.</p></div></div>
     <div className="field">
       <label htmlFor="smart-input">Smart input</label>
-      <textarea id="smart-input" className="textarea" value={smart} onChange={(event) => setSmart(event.target.value)} placeholder="Paste a URL, WiFi payload, vCard, email…" />
-      <button type="button" className="button ghost" onClick={() => applyStructured(smart)}><WandSparkles size={15}/> Detect & use</button>
+      <textarea ref={smartInputRef} id="smart-input" className="textarea" value={smart} onChange={(event) => setSmart(event.target.value)} placeholder="Paste a URL, WiFi payload, vCard, email…" />
+      <button type="button" className="button ghost" onClick={() => applyStructured(smartInputRef.current?.value ?? smart)}><WandSparkles size={15}/> Detect & use</button>
       {message ? <div className={message.includes('detected') ? 'help' : 'error'} role="status">{message}</div> : null}
     </div>
     <div className="divider" />
@@ -177,7 +178,23 @@ export function PayloadEditor() {
       {payloadType === 'email' ? <><Field label="Email"><input className="input" type="email" {...register('email', { required: true })}/></Field><Field label="Subject"><input className="input" {...register('subject')}/></Field><Field label="Message"><textarea className="textarea" {...register('body')}/></Field></> : null}
       {payloadType === 'phone' ? <Field label="Phone number"><input className="input" inputMode="tel" {...register('phone', { required: true })}/></Field> : null}
       {payloadType === 'sms' || payloadType === 'whatsapp' ? <><Field label="Phone number"><input className="input" inputMode="tel" {...register('phone', { required: true })}/></Field><Field label="Message"><textarea className="textarea" {...register('message')}/></Field></> : null}
-      {payloadType === 'wifi' ? <><Field label="Network name (SSID)"><input className="input" {...register('ssid', { required: true })}/></Field><Field label="WiFi security"><select className="select" aria-label="WiFi security" {...register('security')}><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option><option value="nopass">No password</option></select></Field><Field label="WiFi password"><input className="input" type="password" autoComplete="off" aria-label="WiFi password" {...register('password')}/><span className="help">Never uploaded or added to a shareable URL.</span></Field><label className="field-label"><input type="checkbox" {...register('hidden')}/> Hidden network</label></> : null}
+      {payloadType === 'wifi' ? <>
+        <Field label="Network name (SSID)"><input className="input" {...register('ssid', { required: true })}/></Field>
+        <div className="field">
+          <label htmlFor="wifi-security">WiFi security</label>
+          <select id="wifi-security" className="select" {...register('security')}>
+            <option value="WPA">WPA/WPA2/WPA3</option>
+            <option value="WEP">WEP</option>
+            <option value="nopass">No password</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="wifi-password">WiFi password</label>
+          <input id="wifi-password" className="input" type="password" autoComplete="off" aria-describedby="wifi-password-help" {...register('password')}/>
+          <span id="wifi-password-help" className="help">Never uploaded or added to a shareable URL.</span>
+        </div>
+        <label className="field-label"><input type="checkbox" {...register('hidden')}/> Hidden network</label>
+      </> : null}
       {payloadType === 'vcard' ? <><Field label="First name"><input className="input" {...register('firstName')}/></Field><Field label="Last name"><input className="input" {...register('lastName')}/></Field><Field label="Organization"><input className="input" {...register('organization')}/></Field><Field label="Title"><input className="input" {...register('jobTitle')}/></Field><Field label="Phone"><input className="input" {...register('phone')}/></Field><Field label="Email"><input className="input" type="email" {...register('email')}/></Field><Field label="Website"><input className="input" {...register('website')}/></Field></> : null}
       {payloadType === 'location' ? <><Field label="Latitude"><input className="input" type="number" step="any" {...register('latitude', { valueAsNumber: true })}/></Field><Field label="Longitude"><input className="input" type="number" step="any" {...register('longitude', { valueAsNumber: true })}/></Field><Field label="Label"><input className="input" {...register('label')}/></Field></> : null}
       {payloadType === 'event' ? <><Field label="Event title"><input className="input" {...register('title', { required: true })}/></Field><Field label="Starts"><input className="input" type="datetime-local" {...register('start')}/></Field><Field label="Ends"><input className="input" type="datetime-local" {...register('end')}/></Field><Field label="Location"><input className="input" {...register('location')}/></Field><Field label="Description"><textarea className="textarea" {...register('description')}/></Field></> : null}
