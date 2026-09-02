@@ -6,17 +6,61 @@ export interface DetectionResult {
   readonly reason: string;
 }
 
+function containsWhitespace(value: string): boolean {
+  for (const character of value) {
+    if (character.trim() === '') return true;
+  }
+  return false;
+}
+
+function isLikelyEmailAddress(value: string): boolean {
+  if (value.length === 0 || value.length > 320 || containsWhitespace(value)) return false;
+  const at = value.indexOf('@');
+  if (at <= 0 || at !== value.lastIndexOf('@') || at >= value.length - 1) return false;
+  const local = value.slice(0, at);
+  const domain = value.slice(at + 1);
+  if (local.length > 64 || domain.length > 255) return false;
+  const lastDot = domain.lastIndexOf('.');
+  return lastDot > 0 && lastDot < domain.length - 1;
+}
+
+function isLikelyPhoneNumber(value: string): boolean {
+  let digits = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    if (character >= '0' && character <= '9') {
+      digits += 1;
+      continue;
+    }
+    if (character === '+' && index === 0) continue;
+    if (character === ' ' || character === '(' || character === ')' || character === '.' || character === '-') continue;
+    return false;
+  }
+  return digits >= 7;
+}
+
+function isWhatsAppLink(value: string): boolean {
+  const lower = value.toLowerCase();
+  return lower.startsWith('wa.me/')
+    || lower.startsWith('api.whatsapp.com/')
+    || lower.startsWith('http://wa.me/')
+    || lower.startsWith('https://wa.me/')
+    || lower.startsWith('http://api.whatsapp.com/')
+    || lower.startsWith('https://api.whatsapp.com/');
+}
+
 export function detectPayloadType(input: string): DetectionResult {
   const value = input.trim();
   const upper = value.toUpperCase();
-  if (/^WIFI:T:/.test(upper)) return { type: 'wifi', confidence: 1, reason: 'WiFi payload signature' };
-  if (/^BEGIN:VCARD/.test(upper)) return { type: 'vcard', confidence: 1, reason: 'vCard signature' };
-  if (/^BEGIN:VCALENDAR/.test(upper) || /^BEGIN:VEVENT/.test(upper)) return { type: 'event', confidence: 1, reason: 'Calendar signature' };
-  if (/^GEO:-?\d/.test(upper)) return { type: 'location', confidence: 0.99, reason: 'geo URI' };
-  if (/^MAILTO:/i.test(value) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { type: 'email', confidence: 0.96, reason: 'Email address' };
-  if (/^TEL:/i.test(value) || /^\+?[\d\s().-]{7,}$/.test(value)) return { type: 'phone', confidence: 0.9, reason: 'Phone number' };
-  if (/^SMS:/i.test(value)) return { type: 'sms', confidence: 1, reason: 'SMS URI' };
-  if (/^(https?:\/\/)?(wa\.me|api\.whatsapp\.com)\//i.test(value)) return { type: 'whatsapp', confidence: 0.99, reason: 'WhatsApp link' };
+  if (upper.startsWith('WIFI:T:')) return { type: 'wifi', confidence: 1, reason: 'WiFi payload signature' };
+  if (upper.startsWith('BEGIN:VCARD')) return { type: 'vcard', confidence: 1, reason: 'vCard signature' };
+  if (upper.startsWith('BEGIN:VCALENDAR') || upper.startsWith('BEGIN:VEVENT')) return { type: 'event', confidence: 1, reason: 'Calendar signature' };
+  const geoFirst = upper[4] ?? '';
+  if (upper.startsWith('GEO:') && (geoFirst === '-' || (geoFirst >= '0' && geoFirst <= '9'))) return { type: 'location', confidence: 0.99, reason: 'geo URI' };
+  if (upper.startsWith('MAILTO:') || isLikelyEmailAddress(value)) return { type: 'email', confidence: 0.96, reason: 'Email address' };
+  if (upper.startsWith('TEL:') || isLikelyPhoneNumber(value)) return { type: 'phone', confidence: 0.9, reason: 'Phone number' };
+  if (upper.startsWith('SMS:')) return { type: 'sms', confidence: 1, reason: 'SMS URI' };
+  if (isWhatsAppLink(value)) return { type: 'whatsapp', confidence: 0.99, reason: 'WhatsApp link' };
   try {
     const url = new URL(value);
     if (url.protocol === 'http:' || url.protocol === 'https:') return { type: 'url', confidence: 0.98, reason: 'Web URL' };
