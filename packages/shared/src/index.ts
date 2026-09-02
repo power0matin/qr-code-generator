@@ -119,7 +119,8 @@ export interface SafetyIssue {
     | 'GRADIENT_CONTRAST'
     | 'FINDER_CONTRAST'
     | 'SHAPE_RISK'
-    | 'DECODE_FAILED';
+    | 'DECODE_FAILED'
+    | 'ENCODE_FAILED';
   readonly severity: 'info' | 'warning' | 'error';
   readonly message: string;
   readonly fix: string;

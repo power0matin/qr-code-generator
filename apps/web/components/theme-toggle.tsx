@@ -7,11 +7,17 @@ type Theme = 'light' | 'dark' | 'system';
 
 const THEME_KEY = 'moduqr-theme';
 const THEME_EVENT = 'moduqr-theme-change';
+let volatileTheme: Theme = 'system';
 
 function readTheme(): Theme {
   if (typeof window === 'undefined') return 'system';
-  const saved = window.localStorage.getItem(THEME_KEY);
-  return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
+  try {
+    const saved = window.localStorage.getItem(THEME_KEY);
+    volatileTheme = saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
+  } catch {
+    // Keep the in-memory theme when persistent storage is unavailable.
+  }
+  return volatileTheme;
 }
 
 function subscribeTheme(onStoreChange: () => void): () => void {
@@ -36,7 +42,7 @@ function resolved(theme: Theme, prefersDark: boolean): 'light' | 'dark' {
 }
 
 export function ThemeToggle() {
-  const theme = useSyncExternalStore(subscribeTheme, readTheme, readServerTheme);
+  const theme: Theme = useSyncExternalStore<Theme>(subscribeTheme, readTheme, readServerTheme);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -48,7 +54,9 @@ export function ThemeToggle() {
 
   const cycle = () => {
     const next: Theme = theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system';
-    window.localStorage.setItem(THEME_KEY, next);
+    volatileTheme = next;
+    try { window.localStorage.setItem(THEME_KEY, next); } catch { /* Theme still applies for this tab. */ }
+    document.documentElement.setAttribute('data-theme', resolved(next, window.matchMedia('(prefers-color-scheme: dark)').matches));
     window.dispatchEvent(new Event(THEME_EVENT));
   };
 

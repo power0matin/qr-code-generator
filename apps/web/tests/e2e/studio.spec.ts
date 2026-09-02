@@ -33,6 +33,19 @@ test('Phase 1 payload types produce decodable previews', async ({ page }) => {
   }
 });
 
+test('smart input canonicalizes a detected email into an email QR payload', async ({ page }, testInfo) => {
+  const file = path.join(testInfo.outputDir, 'smart-email.png');
+  await page.goto('/generator');
+  await page.getByLabel('Smart input').fill('hello@example.com');
+  await page.getByRole('button', { name: 'Detect & use' }).click();
+  await expect(page.getByText('Email address detected.')).toBeVisible();
+  await expectDecodable(page);
+  await page.locator('.qr-paper').screenshot({ path: file });
+  await page.goto('/scanner');
+  await page.locator('input[type=file]').setInputFiles(file);
+  await expect(page.getByText('mailto:hello@example.com', { exact: true })).toBeVisible({ timeout: 15_000 });
+});
+
 test('renderer output round-trips through image scanner', async ({ page }, testInfo) => {
   const file = path.join(testInfo.outputDir, 'rendered-qr.png');
   await page.goto('/generator');
@@ -42,6 +55,19 @@ test('renderer output round-trips through image scanner', async ({ page }, testI
   await page.locator('input[type=file]').setInputFiles(file);
   await expect(page.getByRole('heading', { name: 'Decoded content' })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('https://example.com', { exact: true })).toBeVisible();
+});
+
+
+
+test('scanner rejects oversized raster dimensions before browser image decoding', async ({ page }) => {
+  await page.goto('/scanner');
+  const oversizedPng = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(oversizedPng, 0);
+  Buffer.from('IHDR').copy(oversizedPng, 12);
+  oversizedPng.writeUInt32BE(12000, 16);
+  oversizedPng.writeUInt32BE(12000, 20);
+  await page.locator('input[type=file]').setInputFiles({ name: 'oversized-scan.png', mimeType: 'image/png', buffer: oversizedPng });
+  await expect(page.getByRole('alert', { name: 'Scan error' })).toContainText('Image dimensions are too large to scan safely.');
 });
 
 test('scan redesign does not put payload in the URL', async ({ page }, testInfo) => {
@@ -78,6 +104,17 @@ test('logo and gradient stay decodable', async ({ page }) => {
   await page.getByRole('tab', { name: 'style' }).click();
   await page.getByLabel('Module gradient').check();
   await expectDecodable(page);
+});
+
+test('design tabs support arrow-key keyboard navigation', async ({ page }) => {
+  await page.goto('/generator');
+  const styleTab = page.getByRole('tab', { name: 'style' });
+  await styleTab.focus();
+  await styleTab.press('ArrowRight');
+  const eyesTab = page.getByRole('tab', { name: 'eyes' });
+  await expect(eyesTab).toBeFocused();
+  await expect(eyesTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel', { name: 'eyes' })).toBeVisible();
 });
 
 test('@a11y critical accessibility smoke test', async ({ page }) => {
@@ -143,4 +180,89 @@ test('Phase 2 multi-stop module and background gradients remain decodable', asyn
   await expectDecodable(page);
   await page.getByLabel('Background gradient').check();
   await expectDecodable(page);
+});
+
+test('payloads beyond QR capacity fail safely without crashing the studio', async ({ page }) => {
+  await page.goto('/generator');
+  await page.getByRole('button', { name: 'Text', exact: true }).click();
+  await page.locator('form textarea').fill('x'.repeat(6_000));
+  await expect(page.getByRole('alert', { name: 'QR render error' })).toContainText('QR cannot be rendered', { timeout: 15_000 });
+  await expect(page.getByLabel('Decode status')).toHaveText('Encode failed');
+  await expect(page.getByRole('button', { name: 'Verify & download' })).toBeDisabled();
+  await expect(page.getByRole('heading', { name: 'QR Studio' })).toBeVisible();
+});
+
+test('saved WiFi project cards do not expose credentials', async ({ page }) => {
+  const secret = 'top-secret-qr-password';
+  const projectName = `wifi-privacy-${Date.now()}`;
+  await page.goto('/generator');
+  await page.getByRole('button', { name: 'WiFi', exact: true }).click();
+  await page.getByLabel('Network name (SSID)').fill('Private Network');
+  await page.getByRole('combobox', { name: 'WiFi security', exact: true }).selectOption('WPA');
+  await page.getByLabel('WiFi password', { exact: true }).fill(secret);
+  await expectDecodable(page);
+  await page.getByLabel('Project name').fill(projectName);
+  await page.getByRole('button', { name: 'Save locally' }).click();
+  await expect(page.getByText('Saved locally on this device.')).toBeVisible();
+
+  await page.goto('/projects');
+  const card = page.locator('.project-card').filter({ hasText: projectName });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('WiFi credentials hidden in the project list.');
+  await expect(card).not.toContainText(secret);
+});
+
+test('saving a loaded favorite project preserves its favorite state', async ({ page }) => {
+  const projectName = `favorite-regression-${Date.now()}`;
+  await page.goto('/generator');
+  await page.getByLabel('Project name').fill(projectName);
+  await page.getByRole('button', { name: 'Save locally' }).click();
+  await expect(page.getByText('Saved locally on this device.')).toBeVisible();
+
+  await page.goto('/projects');
+  const firstCard = page.locator('.project-card').filter({ hasText: projectName });
+  await expect(firstCard).toBeVisible();
+  await firstCard.getByRole('button', { name: 'Add favorite' }).click();
+  await expect(firstCard.getByRole('button', { name: 'Remove favorite' })).toBeVisible();
+  await firstCard.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page).toHaveURL(/\/generator$/);
+  await expect(page.getByText('Local project loaded.')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByLabel('Project name')).toHaveValue(projectName);
+  await page.getByRole('button', { name: 'Save locally' }).click();
+  await expect(page.getByText('Saved locally on this device.')).toBeVisible();
+
+  await page.goto('/projects');
+  const savedCard = page.locator('.project-card').filter({ hasText: projectName });
+  await expect(savedCard.getByRole('button', { name: 'Remove favorite' })).toBeVisible();
+});
+
+test('logo ingestion rejects MIME spoofing and strips unsafe SVG content', async ({ page }) => {
+  await page.goto('/generator');
+  await page.getByRole('tab', { name: 'logo' }).click();
+  const input = page.locator('#logo');
+
+  await input.setInputFiles({ name: 'spoofed.png', mimeType: 'image/png', buffer: Buffer.from('not-a-png') });
+  await expect(page.getByText('The logo file contents do not match its declared image type.')).toBeVisible();
+
+  const oversizedPng = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(oversizedPng, 0);
+  Buffer.from('IHDR').copy(oversizedPng, 12);
+  oversizedPng.writeUInt32BE(5000, 16);
+  oversizedPng.writeUInt32BE(5000, 20);
+  await input.setInputFiles({ name: 'oversized.png', mimeType: 'image/png', buffer: oversizedPng });
+  await expect(page.getByText('Logo dimensions are too large. Use an image up to 4096×4096 and 16 megapixels.')).toBeVisible();
+
+  const blankSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><defs><linearGradient id="g"><stop offset="0" stop-color="#111827"/></linearGradient></defs></svg>';
+  await input.setInputFiles({ name: 'blank.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(blankSvg) });
+  await expect(page.getByText('SVG did not contain renderable geometry after sanitization.')).toBeVisible();
+
+  const unsafeSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><script>alert(1)</script><rect width="40" height="40" fill="url(https://attacker.example/paint)"/><circle cx="20" cy="20" r="12" fill="#111827"/></svg>';
+  await input.setInputFiles({ name: 'unsafe.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(unsafeSvg) });
+  await expectDecodable(page);
+  const href = await page.locator('.qr-paper image').getAttribute('href');
+  expect(href).not.toBeNull();
+  const decodedHref = decodeURIComponent(href ?? '');
+  expect(decodedHref).not.toContain('<script');
+  expect(decodedHref).not.toContain('attacker.example');
 });

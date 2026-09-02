@@ -10,19 +10,21 @@ permissions:
 jobs:
   verify-and-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: 10.15.0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - name: Verify tag matches package version
         run: pnpm release:verify
       - run: pnpm check
+      - run: pnpm audit:prod
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: pnpm test:e2e
       - name: Create GitHub release

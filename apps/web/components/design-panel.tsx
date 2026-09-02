@@ -35,6 +35,7 @@ const finderPositions: readonly { readonly value: FinderPosition; readonly label
 const frameStyles: readonly FrameStyle[] = ['none', 'minimal', 'rounded', 'badge', 'label', 'sticker'];
 
 type Tab = 'style' | 'eyes' | 'logo' | 'frame' | 'presets';
+const designTabs: readonly Tab[] = ['style', 'eyes', 'logo', 'frame', 'presets'];
 
 export function DesignPanel() {
   const style = useStudioStore((state) => state.style);
@@ -73,10 +74,29 @@ export function DesignPanel() {
   return <div>
     <div className="panel-header"><div><h2>Design</h2><p>Style it without losing reliability.</p></div></div>
     <div className="tabs" role="tablist" aria-label="Design sections">
-      {(['style', 'eyes', 'logo', 'frame', 'presets'] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{item}</button>)}
+      {designTabs.map((item, index) => <button
+        id={`design-tab-${item}`}
+        key={item}
+        type="button"
+        role="tab"
+        aria-selected={tab === item}
+        aria-controls={`design-panel-${item}`}
+        tabIndex={tab === item ? 0 : -1}
+        onClick={() => setTab(item)}
+        onKeyDown={(event) => {
+          const key = event.key;
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+          event.preventDefault();
+          const nextIndex = key === 'Home' ? 0 : key === 'End' ? designTabs.length - 1 : (index + (key === 'ArrowRight' ? 1 : -1) + designTabs.length) % designTabs.length;
+          const next = designTabs[nextIndex];
+          if (!next) return;
+          setTab(next);
+          window.requestAnimationFrame(() => document.getElementById(`design-tab-${next}`)?.focus());
+        }}
+      >{item}</button>)}
     </div>
 
-    {tab === 'style' ? <div className="form-stack">
+    {tab === 'style' ? <div className="form-stack" role="tabpanel" id="design-panel-style" aria-labelledby="design-tab-style">
       <div className="field">
         <span className="field-label">Modules</span>
         <span className="help">Connected and Fluid use neighbour-aware geometry rather than isolated module rounding.</span>
@@ -99,12 +119,12 @@ export function DesignPanel() {
       />
       {style.backgroundGradient ? <GradientEditor label="Background gradient" gradient={style.backgroundGradient} onChange={(backgroundGradient) => patchStyle({ backgroundGradient })}/> : null}
 
-      <Range label="Quiet zone" value={style.quietZone} min={4} max={12} step={1} onChange={(quietZone) => patchStyle({ quietZone })}/>
-      <Range label="Module gap" value={style.moduleGap} min={0} max={0.25} step={0.01} onChange={(moduleGap) => patchStyle({ moduleGap })}/>
+      <Range label="Quiet zone" value={style.quietZone} min={4} max={16} step={1} onChange={(quietZone) => patchStyle({ quietZone })}/>
+      <Range label="Module gap" value={style.moduleGap} min={0} max={0.35} step={0.01} onChange={(moduleGap) => patchStyle({ moduleGap })}/>
       <div className="field"><label htmlFor="ecc">Error correction</label><select id="ecc" className="select" value={style.errorCorrection} onChange={(event) => patchStyle({ errorCorrection: event.target.value as QRStyle['errorCorrection'] })}><option value="L">Low</option><option value="M">Medium</option><option value="Q">Quartile</option><option value="H">High</option></select></div>
     </div> : null}
 
-    {tab === 'eyes' ? <div className="form-stack">
+    {tab === 'eyes' ? <div className="form-stack" role="tabpanel" id="design-panel-eyes" aria-labelledby="design-tab-eyes">
       <div className="field"><span className="field-label">Global finder style</span><span className="help">These values apply unless a finder has an individual override.</span></div>
       <span className="field-label">Outer finder</span>
       <div className="style-grid">{finderShapes.map((shape) => <button className="style-choice" type="button" key={shape} aria-pressed={style.finderOuterShape === shape} onClick={() => patchStyle({ finderOuterShape: shape })}>{shape}</button>)}</div>
@@ -125,9 +145,9 @@ export function DesignPanel() {
       </div>
     </div> : null}
 
-    {tab === 'logo' ? <div className="form-stack"><div className="field"><label htmlFor="logo">Logo</label><input id="logo" className="input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(event) => void onLogo(event.target.files?.[0])}/><span className="help">Processed locally. SVG is sanitized before use.</span>{logoError ? <span className="error">{logoError}</span> : null}</div>{style.logo.dataUrl ? <><Range label="Logo size" value={style.logo.size} min={0.1} max={0.26} step={0.01} onChange={(size) => patchLogo({ size })}/><Range label="Padding" value={style.logo.padding} min={0} max={14} step={1} onChange={(padding) => patchLogo({ padding })}/><ColorField label="Logo background" value={style.logo.background} onChange={(background) => patchLogo({ background })}/><button type="button" className="button danger" onClick={() => patchLogo({ dataUrl: null, mimeType: null })}>Remove logo</button></> : null}</div> : null}
-    {tab === 'frame' ? <div className="form-stack"><span className="field-label">Frame style</span><div className="style-grid">{frameStyles.map((frame) => <button className="style-choice" type="button" key={frame} aria-pressed={style.frame.style === frame} onClick={() => patchFrame({ style: frame })}>{frame}</button>)}</div>{style.frame.style !== 'none' ? <><div className="field"><label htmlFor="frame-text">CTA text</label><input id="frame-text" className="input" value={style.frame.text} maxLength={80} onChange={(event) => patchFrame({ text: event.target.value })}/></div><Range label="Text size" value={style.frame.fontSize} min={12} max={32} step={1} onChange={(fontSize) => patchFrame({ fontSize })}/></> : null}</div> : null}
-    {tab === 'presets' ? <div className="preset-list">{PRESETS.map((preset) => <button type="button" className="preset-card" key={preset.id} aria-pressed={presetId === preset.id} onClick={() => setStyle(preset.style, preset.id)}><span className="preset-swatch" style={{ background: preset.style.background, color: preset.style.foreground }}><i/><i/><i/><i/></span><span>{preset.name}</span></button>)}</div> : null}
+    {tab === 'logo' ? <div className="form-stack" role="tabpanel" id="design-panel-logo" aria-labelledby="design-tab-logo"><div className="field"><label htmlFor="logo">Logo</label><input id="logo" className="input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(event) => void onLogo(event.target.files?.[0])}/><span className="help">Processed locally. SVG is sanitized before use.</span>{logoError ? <span className="error">{logoError}</span> : null}</div>{style.logo.dataUrl ? <><Range label="Logo size" value={style.logo.size} min={0.1} max={0.26} step={0.01} onChange={(size) => patchLogo({ size })}/><Range label="Padding" value={style.logo.padding} min={0} max={20} step={1} onChange={(padding) => patchLogo({ padding })}/><ColorField label="Logo background" value={style.logo.background} onChange={(background) => patchLogo({ background })}/><button type="button" className="button danger" onClick={() => patchLogo({ dataUrl: null, mimeType: null })}>Remove logo</button></> : null}</div> : null}
+    {tab === 'frame' ? <div className="form-stack" role="tabpanel" id="design-panel-frame" aria-labelledby="design-tab-frame"><span className="field-label">Frame style</span><div className="style-grid">{frameStyles.map((frame) => <button className="style-choice" type="button" key={frame} aria-pressed={style.frame.style === frame} onClick={() => patchFrame({ style: frame })}>{frame}</button>)}</div>{style.frame.style !== 'none' ? <><div className="field"><label htmlFor="frame-text">CTA text</label><input id="frame-text" className="input" value={style.frame.text} maxLength={80} onChange={(event) => patchFrame({ text: event.target.value })}/></div><Range label="Text size" value={style.frame.fontSize} min={12} max={40} step={1} onChange={(fontSize) => patchFrame({ fontSize })}/></> : null}</div> : null}
+    {tab === 'presets' ? <div className="preset-list" role="tabpanel" id="design-panel-presets" aria-labelledby="design-tab-presets">{PRESETS.map((preset) => <button type="button" className="preset-card" key={preset.id} aria-pressed={presetId === preset.id} onClick={() => setStyle(preset.style, preset.id)}><span className="preset-swatch" style={{ background: preset.style.background, color: preset.style.foreground }}><i/><i/><i/><i/></span><span>{preset.name}</span></button>)}</div> : null}
   </div>;
 }
 

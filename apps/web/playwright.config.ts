@@ -1,6 +1,7 @@
 import { defineConfig, devices, type Project } from '@playwright/test';
 
 const isCI = Boolean(process.env['CI']);
+const useProductionBuild = isCI || process.env['PLAYWRIGHT_USE_PRODUCTION_BUILD'] === '1';
 
 const localProjects: Project[] = [
   {
@@ -37,9 +38,9 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: isCI ? 'corepack pnpm start' : 'corepack pnpm dev --hostname 127.0.0.1',
+    command: useProductionBuild ? 'corepack pnpm start' : 'corepack pnpm dev --hostname 127.0.0.1',
     url: 'http://127.0.0.1:3000',
-    reuseExistingServer: !isCI,
+    reuseExistingServer: !useProductionBuild,
   },
   projects: isCI ? ciProjects : localProjects,
 });

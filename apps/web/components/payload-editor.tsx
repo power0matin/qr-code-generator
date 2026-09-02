@@ -35,7 +35,7 @@ interface FormValues {
 }
 
 const defaults: FormValues = {
-  url: 'https://example.com', text: 'Hello from ModuQR', email: 'hello@example.com', subject: '', body: '', phone: '+15550100', message: 'Hello', ssid: 'My WiFi', password: '', security: 'WPA', hidden: false,
+  url: 'https://example.com', text: 'Hello from ModuQR', email: 'hello@example.com', subject: '', body: '', phone: '+15550100', message: 'Hello', ssid: 'My WiFi', password: '', security: 'nopass', hidden: false,
   firstName: 'Alex', lastName: 'Morgan', organization: '', jobTitle: '', title: 'Event', website: '', latitude: 40.7128, longitude: -74.006, label: '', start: '2026-09-01T09:00', end: '2026-09-01T10:00', location: '', description: '',
 };
 
@@ -106,14 +106,15 @@ export function PayloadEditor() {
     }
   };
 
-  const applyStructured = useCallback((value: string) => {
+  const applyStructured = useCallback((value: string, preserveRawPayload = false) => {
     if (!value.trim()) return;
     try {
       const parsed = parseStructuredPayload(value);
       const nextValues = { ...defaults, ...valuesForStructured(parsed.fields) };
       reset(nextValues);
-      lastWritten.current = value.trim();
-      setContent(parsed.type, value.trim());
+      const nextPayload = preserveRawPayload ? value.trim() : serializeFormValues(parsed.type, nextValues as FormValues);
+      lastWritten.current = nextPayload;
+      setContent(parsed.type, nextPayload);
       setMessage(`${detectPayloadType(value).reason} detected.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not parse this input.');
@@ -121,15 +122,24 @@ export function PayloadEditor() {
   }, [reset, setContent]);
 
   useEffect(() => {
-    const redesign = sessionStorage.getItem('moduqr-redesign-payload');
-    if (redesign) sessionStorage.removeItem('moduqr-redesign-payload');
+    let redesign: string | null = null;
+    try {
+      redesign = window.sessionStorage.getItem('moduqr-redesign-payload');
+    } catch {
+      redesign = null;
+    }
     if (!redesign && payload === lastWritten.current) return;
 
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
       if (redesign) {
-        applyStructured(redesign);
+        applyStructured(redesign, true);
+        try {
+          window.sessionStorage.removeItem('moduqr-redesign-payload');
+        } catch {
+          // The payload is already applied; storage cleanup is best-effort only.
+        }
         return;
       }
       try {
@@ -167,7 +177,7 @@ export function PayloadEditor() {
       {payloadType === 'email' ? <><Field label="Email"><input className="input" type="email" {...register('email', { required: true })}/></Field><Field label="Subject"><input className="input" {...register('subject')}/></Field><Field label="Message"><textarea className="textarea" {...register('body')}/></Field></> : null}
       {payloadType === 'phone' ? <Field label="Phone number"><input className="input" inputMode="tel" {...register('phone', { required: true })}/></Field> : null}
       {payloadType === 'sms' || payloadType === 'whatsapp' ? <><Field label="Phone number"><input className="input" inputMode="tel" {...register('phone', { required: true })}/></Field><Field label="Message"><textarea className="textarea" {...register('message')}/></Field></> : null}
-      {payloadType === 'wifi' ? <><Field label="Network name (SSID)"><input className="input" {...register('ssid', { required: true })}/></Field><Field label="Security"><select className="select" {...register('security')}><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option><option value="nopass">No password</option></select></Field><Field label="Password"><input className="input" type="password" autoComplete="off" {...register('password')}/><span className="help">Never uploaded or added to a shareable URL.</span></Field><label className="field-label"><input type="checkbox" {...register('hidden')}/> Hidden network</label></> : null}
+      {payloadType === 'wifi' ? <><Field label="Network name (SSID)"><input className="input" {...register('ssid', { required: true })}/></Field><Field label="WiFi security"><select className="select" aria-label="WiFi security" {...register('security')}><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option><option value="nopass">No password</option></select></Field><Field label="WiFi password"><input className="input" type="password" autoComplete="off" aria-label="WiFi password" {...register('password')}/><span className="help">Never uploaded or added to a shareable URL.</span></Field><label className="field-label"><input type="checkbox" {...register('hidden')}/> Hidden network</label></> : null}
       {payloadType === 'vcard' ? <><Field label="First name"><input className="input" {...register('firstName')}/></Field><Field label="Last name"><input className="input" {...register('lastName')}/></Field><Field label="Organization"><input className="input" {...register('organization')}/></Field><Field label="Title"><input className="input" {...register('jobTitle')}/></Field><Field label="Phone"><input className="input" {...register('phone')}/></Field><Field label="Email"><input className="input" type="email" {...register('email')}/></Field><Field label="Website"><input className="input" {...register('website')}/></Field></> : null}
       {payloadType === 'location' ? <><Field label="Latitude"><input className="input" type="number" step="any" {...register('latitude', { valueAsNumber: true })}/></Field><Field label="Longitude"><input className="input" type="number" step="any" {...register('longitude', { valueAsNumber: true })}/></Field><Field label="Label"><input className="input" {...register('label')}/></Field></> : null}
       {payloadType === 'event' ? <><Field label="Event title"><input className="input" {...register('title', { required: true })}/></Field><Field label="Starts"><input className="input" type="datetime-local" {...register('start')}/></Field><Field label="Ends"><input className="input" type="datetime-local" {...register('end')}/></Field><Field label="Location"><input className="input" {...register('location')}/></Field><Field label="Description"><textarea className="textarea" {...register('description')}/></Field></> : null}

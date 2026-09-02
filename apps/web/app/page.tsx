@@ -3,7 +3,7 @@ import { Check, ScanLine, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
 import { renderQR, DEFAULT_STYLE } from '@moduqr/renderer';
 
 export default function HomePage() {
-  const hero = renderQR('https://moduqr.dev', {
+  const hero = renderQR('https://github.com/power0matin/qr-code-generator', {
     ...DEFAULT_STYLE,
     moduleShape: 'rounded',
     finderOuterShape: 'rounded',
@@ -73,8 +73,8 @@ export default function HomePage() {
             <div className="hero-card-topline">
               <span className="hero-kicker">Studio preview</span>
               <div className="hero-mini-pills" aria-label="Preview summary">
-                <span className="mini-pill">Aurora preset</span>
-                <span className="mini-pill success">96 / 100 safety</span>
+                <span className="mini-pill">Custom gradient</span>
+                <span className="mini-pill success">Safety-aware styling</span>
               </div>
             </div>
 
@@ -101,8 +101,8 @@ export default function HomePage() {
               </div>
               <div className="hero-footer-metrics">
                 <div className="metric-chip">
-                  <span>Live preview</span>
-                  <strong>1:1 renderer</strong>
+                  <span>Preview parity</span>
+                  <strong>Same renderer</strong>
                 </div>
                 <div className="score-pill">Scan checks enabled</div>
               </div>

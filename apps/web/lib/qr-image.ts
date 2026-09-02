@@ -1,5 +1,6 @@
 'use client';
 
+import { inspectRasterDimensions, rasterDimensionsWithinLimits, type RasterMimeType } from '@moduqr/core';
 import decodeQR from 'qr/decode.js';
 
 export async function svgToCanvas(svg: string, width: number, transparent = false, compositeBackground: string | null = null): Promise<HTMLCanvasElement> {
@@ -44,13 +45,33 @@ export function decodeCanvas(canvas: HTMLCanvasElement): string | null {
   }
 }
 
+const MAX_SCAN_IMAGE_DIMENSION = 12_000;
+const MAX_SCAN_IMAGE_PIXELS = 32_000_000;
+
+const SUPPORTED_SCAN_MIME_TYPES = new Set<RasterMimeType>(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']);
+
+function assertSafeScanImageDimensions(bytes: Uint8Array, mimeType: RasterMimeType): void {
+  const dimensions = inspectRasterDimensions(bytes, mimeType);
+  if (!dimensions) throw new Error('Image dimensions or file signature could not be validated.');
+  if (!rasterDimensionsWithinLimits(dimensions, MAX_SCAN_IMAGE_DIMENSION, MAX_SCAN_IMAGE_PIXELS)) {
+    throw new Error('Image dimensions are too large to scan safely.');
+  }
+}
+
 export async function decodeImageFile(file: File): Promise<string> {
-  const supported = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']);
-  if (!supported.has(file.type)) throw new Error('Choose a PNG, JPEG, WebP, GIF, or AVIF image.');
+  if (!SUPPORTED_SCAN_MIME_TYPES.has(file.type as RasterMimeType)) throw new Error('Choose a PNG, JPEG, WebP, GIF, or AVIF image.');
+  const mimeType = file.type as RasterMimeType;
+  if (file.size === 0) throw new Error('Image file is empty.');
   if (file.size > 12_000_000) throw new Error('Image must be 12 MB or smaller.');
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  assertSafeScanImageDimensions(bytes, mimeType);
   const url = URL.createObjectURL(file);
   try {
     const image = await loadImage(url);
+    if (image.naturalWidth < 1 || image.naturalHeight < 1) throw new Error('Image dimensions are invalid.');
+    if (image.naturalWidth > MAX_SCAN_IMAGE_DIMENSION || image.naturalHeight > MAX_SCAN_IMAGE_DIMENSION || image.naturalWidth * image.naturalHeight > MAX_SCAN_IMAGE_PIXELS) {
+      throw new Error('Image dimensions are too large to scan safely.');
+    }
     const max = 1800;
     const scale = Math.min(1, max / Math.max(image.naturalWidth, image.naturalHeight));
     const canvas = document.createElement('canvas');
@@ -67,11 +88,18 @@ export async function decodeImageFile(file: File): Promise<string> {
   }
 }
 
-export function isSafeExternalUrl(value: string): boolean {
+export function normalizeSafeExternalUrl(value: string): string | null {
   try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    const url = new URL(value.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    url.username = '';
+    url.password = '';
+    return url.toString();
   } catch {
-    return false;
+    return null;
   }
+}
+
+export function isSafeExternalUrl(value: string): boolean {
+  return normalizeSafeExternalUrl(value) !== null;
 }

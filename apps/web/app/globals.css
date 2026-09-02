@@ -276,6 +276,8 @@ html[data-theme='dark'] .hero-qr-shell {
 
 .scanner-drop { min-height: 260px; border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 20px; display: grid; place-items: center; text-align: center; padding: 28px; background: var(--panel); }
 .scanner-result { margin-top: 18px; border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: var(--panel); overflow-wrap: anywhere; }
+.render-error { position: relative; z-index: 1; width: min(100%, 520px); }
+.render-error p { margin-bottom: 0; }
 
 .site-footer { border-top: 1px solid var(--line); padding: 28px 0 42px; color: var(--muted); font-size: 12px; }
 .footer-row { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }

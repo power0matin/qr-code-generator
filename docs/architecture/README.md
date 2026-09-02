@@ -1,6 +1,6 @@
 # Architecture
 
-ModuQR separates the QR specification work from the design surface.
+ModuQR separates QR specification work from the design surface.
 
 ```text
 apps/web
@@ -14,7 +14,7 @@ packages/presets
 packages/scan-validator
   deterministic scan-safety heuristics
 packages/shared
-  stable cross-package types and document schema version
+  cross-package types and the current design document schema version
 ```
 
 ## Encoding vs rendering
@@ -25,12 +25,18 @@ This boundary is intentional: replacing the encoder should not require rewriting
 
 ## Client privacy boundary
 
-Phase 1 has no application API for static QR generation. Payloads, logo files, scanner images, and IndexedDB projects stay client-side. The browser may still make normal requests required to load the web application itself.
+The current static product has no application API for QR generation. Payloads, logo files, scanner images and IndexedDB projects stay client-side. The browser still makes normal requests required to load the web application itself.
 
 ## Document migrations
 
-Saved designs carry `version: 1`. Future schema changes must add explicit migration code before incrementing the schema. Unknown or malformed JSON is rejected with Zod rather than silently coerced.
+Saved designs currently carry `version: 2`. `packages/core/src/project-schema.ts` can explicitly migrate schema-v1 documents into schema v2. Unknown or malformed JSON is rejected with Zod rather than silently coerced, and imported logo/paint fields are validated as part of that boundary.
+
+Every future schema increment must ship an explicit migration path for supported older documents before the new version becomes the default.
+
+## Local persistence
+
+IndexedDB operations resolve after their transaction completes rather than at individual request success. This makes the in-memory UI state reflect committed browser storage, not an optimistic request callback.
 
 ## Future packages
 
-`react`, `sdk`, `cli`, and `mcp` are deliberately absent until Phase 3 APIs exist. Empty packages would create false stability commitments.
+`react`, `sdk`, `cli`, and `mcp` are deliberately absent until their actual public APIs exist. Empty packages would create false stability commitments.

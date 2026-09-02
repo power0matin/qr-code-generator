@@ -49,26 +49,46 @@ function parseWifiFields(input: string): Map<string, string> {
       current += char;
     }
   }
+  if (escaped) current += '\\';
   if (current) parts.push(current);
   for (const part of parts) {
     const separator = part.indexOf(':');
-    if (separator > 0) fields.set(part.slice(0, separator), unescapeWifi(part.slice(separator + 1)));
+    if (separator > 0) fields.set(part.slice(0, separator).toUpperCase(), unescapeWifi(part.slice(separator + 1)));
   }
   return fields;
 }
 
+function localDateInputFromParts(year: number, month: number, day: number, hour: number, minute: number): string {
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}`;
+}
+
 function iCalDateToLocalInput(value: string): string {
-  const compact = value.trim().match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(?:\d{2})?Z?$/);
+  const raw = value.trim();
+  const compact = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(?:\d{2})?(Z)?$/);
   if (compact) {
-    const [, year, month, day, hour, minute] = compact;
-    return `${year}-${month}-${day}T${hour}:${minute}`;
+    const [, yearRaw, monthRaw, dayRaw, hourRaw, minuteRaw, utcMarker] = compact;
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    const day = Number(dayRaw);
+    const hour = Number(hourRaw);
+    const minute = Number(minuteRaw);
+    if (utcMarker === 'Z') {
+      const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
+      return localDateInputFromParts(date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes());
+    }
+    return localDateInputFromParts(year, month, day, hour, minute);
   }
-  const dateOnly = value.trim().match(/^(\d{4})(\d{2})(\d{2})$/);
+  const dateOnly = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (dateOnly) {
     const [, year, month, day] = dateOnly;
     return `${year}-${month}-${day}T00:00`;
   }
-  return value.trim();
+  return raw;
+}
+
+function unfoldContentLines(value: string): string {
+  return value.replace(/\r?\n[ \t]/g, '');
 }
 
 function unescapeICal(value: string): string {
@@ -87,8 +107,8 @@ export function parseStructuredPayload(input: string): ParsedStructuredPayload {
     case 'wifi': {
       const fields = parseWifiFields(value);
       const securityRaw = fields.get('T') ?? 'WPA';
-      const security = securityRaw === 'WEP' || securityRaw === 'nopass' ? securityRaw : 'WPA';
-      return { type: 'wifi', fields: { ssid: fields.get('S') ?? '', password: fields.get('P') ?? '', security, hidden: fields.get('H') === 'true' } };
+      const security = securityRaw === 'WEP' || securityRaw.toLowerCase() === 'nopass' ? (securityRaw.toLowerCase() === 'nopass' ? 'nopass' : 'WEP') : 'WPA';
+      return { type: 'wifi', fields: { ssid: fields.get('S') ?? '', password: security === 'nopass' ? '' : fields.get('P') ?? '', security, hidden: (fields.get('H') ?? '').toLowerCase() === 'true' } };
     }
     case 'email': {
       const mail = value.replace(/^mailto:/i, '');
@@ -109,16 +129,28 @@ export function parseStructuredPayload(input: string): ParsedStructuredPayload {
       return { type: 'whatsapp', fields: { phone, message: url.searchParams.get('text') ?? '' } };
     }
     case 'location': {
-      const match = value.match(/^geo:([^,]+),([^?]+)(?:\?q=[^(]+\((.*)\))?$/i);
-      return { type: 'location', fields: { latitude: Number(match?.[1] ?? 0), longitude: Number(match?.[2] ?? 0), label: match?.[3] ? decodeURIComponent(match[3]) : '' } };
+      const geoBody = value.replace(/^geo:/i, '');
+      const [coordinatePart = '', query = ''] = geoBody.split('?', 2);
+      const separator = coordinatePart.indexOf(',');
+      const latitudeRaw = separator >= 0 ? coordinatePart.slice(0, separator) : '';
+      const longitudeRaw = separator >= 0 ? coordinatePart.slice(separator + 1) : '';
+      const latitude = Number(latitudeRaw);
+      const longitude = Number(longitudeRaw);
+      const qValue = new URLSearchParams(query).get('q') ?? '';
+      const labelMatch = qValue.match(/\((.*)\)$/);
+      const label = labelMatch?.[1] ?? (qValue && !qValue.startsWith(`${latitudeRaw},${longitudeRaw}`) ? qValue : '');
+      return { type: 'location', fields: { latitude, longitude, label } };
     }
     case 'vcard': {
-      const field = (name: string): string => value.match(new RegExp(`^${name}(?:;[^:]*)?:(.*)$`, 'im'))?.[1]?.replace(/\\n/gi, '\n').replace(/\\([;,\\])/g, '$1') ?? '';
+      const unfolded = unfoldContentLines(value);
+      const field = (name: string): string => unfolded.match(new RegExp(`^${name}(?:;[^:]*)?:(.*)$`, 'im'))?.[1]?.replace(/\\n/gi, '\n').replace(/\\([;,\\])/g, '$1') ?? '';
       const names = field('N').split(';');
       return { type: 'vcard', fields: { firstName: names[1] ?? '', lastName: names[0] ?? '', organization: field('ORG'), jobTitle: field('TITLE'), phone: field('TEL'), email: field('EMAIL'), website: field('URL') } };
     }
-    case 'event':
-      return { type: 'event', fields: { title: unescapeICal(value.match(/^SUMMARY:(.*)$/im)?.[1] ?? 'Event'), start: iCalDateToLocalInput(value.match(/^DTSTART(?:;[^:]*)?:(.*)$/im)?.[1] ?? ''), end: iCalDateToLocalInput(value.match(/^DTEND(?:;[^:]*)?:(.*)$/im)?.[1] ?? ''), location: unescapeICal(value.match(/^LOCATION:(.*)$/im)?.[1] ?? ''), description: unescapeICal(value.match(/^DESCRIPTION:(.*)$/im)?.[1] ?? '') } };
+    case 'event': {
+      const unfolded = unfoldContentLines(value);
+      return { type: 'event', fields: { title: unescapeICal(unfolded.match(/^SUMMARY:(.*)$/im)?.[1] ?? 'Event'), start: iCalDateToLocalInput(unfolded.match(/^DTSTART(?:;[^:]*)?:(.*)$/im)?.[1] ?? ''), end: iCalDateToLocalInput(unfolded.match(/^DTEND(?:;[^:]*)?:(.*)$/im)?.[1] ?? ''), location: unescapeICal(unfolded.match(/^LOCATION:(.*)$/im)?.[1] ?? ''), description: unescapeICal(unfolded.match(/^DESCRIPTION:(.*)$/im)?.[1] ?? '') } };
+    }
     case 'url':
       return { type: 'url', fields: { url: value } };
     case 'text':
