@@ -3,10 +3,12 @@
 > Roadmap phases describe product scope, not release version numbers. ModuQR follows Semantic Versioning independently; see [`docs/VERSIONING.md`](docs/VERSIONING.md).
 
 ## Phase 1 — Foundation & Static QR Studio
-Production-ready static generator, custom SVG renderer, scanner, scan-safety v1, local projects, offline PWA, exports, accessibility and SEO.
+Release-candidate static generator foundation: custom SVG renderer, image scanner, scan-safety v1, local projects, offline PWA, exports, accessibility and SEO. Public release remains gated by the complete clean-install and browser/security QA matrix.
 
-## Phase 2 — Professional Designer
+## Phase 2 — Professional Designer — In progress
 Neighbour-aware rendering, richer frames/gradients, 50+ validated presets, mockups, print assistant, safety simulations/Auto Fix, camera scanner, batch generation and advanced history.
+
+Current Phase 2 foundation includes neighbour-aware Connected/Fluid modules, independent finder overrides, multi-stop module/background gradients, schema-v2 project migration, and matching scan-safety regression coverage.
 
 ## Phase 3 — Dynamic & Developer Platform
 Optional PostgreSQL server mode, dynamic redirects, privacy-respecting analytics, REST/OpenAPI, API keys, SDK/React/CLI/embed/MCP packages and Docker self-hosting.

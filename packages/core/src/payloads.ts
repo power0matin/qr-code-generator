@@ -6,8 +6,13 @@ const httpUrl = z.string().trim().url().refine((value) => {
   const protocol = new URL(value).protocol;
   return protocol === 'http:' || protocol === 'https:';
 }, 'Use an http:// or https:// URL.');
-const phone = z.string().trim().min(1).refine((value) => value.replace(/\D/g, '').length >= 3, 'Enter a valid phone number.');
+const phone = z.string().trim().min(1).refine((value) => {
+  if (!/^\+?[\d\s().-]+$/.test(value)) return false;
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 3 && digits.length <= 15;
+}, 'Enter a valid phone number with 3–15 digits.');
 const optionalEmail = z.union([z.literal(''), z.string().trim().email()]);
+const optionalPhone = z.union([z.literal(''), phone]);
 const optionalHttpUrl = z.union([z.literal(''), httpUrl]);
 
 export const payloadInputSchemas = {
@@ -17,9 +22,15 @@ export const payloadInputSchemas = {
   phone: z.object({ phone }),
   sms: z.object({ phone, message: z.string().max(8_000) }),
   whatsapp: z.object({ phone, message: z.string().max(8_000) }),
-  wifi: z.object({ ssid: nonEmpty, password: z.string(), security: z.enum(['WPA', 'WEP', 'nopass']), hidden: z.boolean() }),
-  vcard: z.object({ firstName: z.string().max(256), lastName: z.string().max(256), organization: z.string().max(512), title: z.string().max(512), phone: z.string().max(128), email: optionalEmail, website: optionalHttpUrl }).refine((value) => Boolean(value.firstName.trim() || value.lastName.trim() || value.organization.trim()), 'Add a name or organization to the contact.'),
-  location: z.object({ latitude: z.number().gte(-90).lte(90), longitude: z.number().gte(-180).lte(180), label: z.string() }),
+  wifi: z.object({ ssid: nonEmpty, password: z.string().max(8_000), security: z.enum(['WPA', 'WEP', 'nopass']), hidden: z.boolean() })
+    .superRefine((value, context) => {
+      if (value.security !== 'nopass' && value.password.length === 0) {
+        context.addIssue({ code: 'custom', path: ['password'], message: 'Enter the WiFi password or choose No password.' });
+      }
+    }),
+  vcard: z.object({ firstName: z.string().max(256), lastName: z.string().max(256), organization: z.string().max(512), title: z.string().max(512), phone: optionalPhone, email: optionalEmail, website: optionalHttpUrl })
+    .refine((value) => Boolean(value.firstName.trim() || value.lastName.trim() || value.organization.trim()), 'Add a name or organization to the contact.'),
+  location: z.object({ latitude: z.number().gte(-90).lte(90), longitude: z.number().gte(-180).lte(180), label: z.string().max(2_000) }),
   event: z.object({ title: nonEmpty, start: nonEmpty.refine((value) => !Number.isNaN(new Date(value).valueOf()), 'Invalid event start.'), end: nonEmpty.refine((value) => !Number.isNaN(new Date(value).valueOf()), 'Invalid event end.'), location: z.string().max(2_000), description: z.string().max(8_000) }),
 } as const;
 
@@ -28,19 +39,29 @@ export type PayloadInputs = {
 };
 
 function escapeWifi(value: string): string {
-  return value.replace(/([\\;,:"])/g, '\\$1');
+  return value.replace(/([\\;,:\"])/g, '\\$1');
+}
+
+function normalizeTextNewlines(value: string): string {
+  return value.replace(/\r\n?/g, '\n');
 }
 
 function escapeVCard(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,');
+  return normalizeTextNewlines(value).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,');
 }
 
 function escapeICal(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,');
+  return normalizeTextNewlines(value).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,');
+}
+
+function encodeGeoLabel(value: string): string {
+  return encodeURIComponent(value).replace(/[()]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 function normalizePhone(value: string): string {
-  return value.replace(/[^+\d]/g, '');
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  return `${trimmed.startsWith('+') ? '+' : ''}${digits}`;
 }
 
 function compactDate(value: string): string {
@@ -72,16 +93,18 @@ export function serializePayload<K extends PayloadType>(type: K, raw: PayloadInp
     }
     case 'whatsapp': {
       const input = value as PayloadInputs['whatsapp'];
-      const phone = normalizePhone(input.phone).replace(/^\+/, '');
-      return `https://wa.me/${phone}${input.message ? `?text=${encodeURIComponent(input.message)}` : ''}`;
+      const normalized = normalizePhone(input.phone);
+      const whatsappPhone = normalized.replace(/^\+/, '');
+      return `https://wa.me/${whatsappPhone}${input.message ? `?text=${encodeURIComponent(input.message)}` : ''}`;
     }
     case 'wifi': {
       const input = value as PayloadInputs['wifi'];
-      return `WIFI:T:${input.security};S:${escapeWifi(input.ssid)};P:${escapeWifi(input.password)};H:${input.hidden ? 'true' : 'false'};;`;
+      const passwordField = input.security === 'nopass' ? '' : `P:${escapeWifi(input.password)};`;
+      return `WIFI:T:${input.security};S:${escapeWifi(input.ssid)};${passwordField}H:${input.hidden ? 'true' : 'false'};;`;
     }
     case 'vcard': {
       const input = value as PayloadInputs['vcard'];
-      const fullName = `${input.firstName} ${input.lastName}`.trim();
+      const fullName = `${input.firstName} ${input.lastName}`.trim() || input.organization.trim();
       const rows = [
         'BEGIN:VCARD',
         'VERSION:3.0',
@@ -98,12 +121,12 @@ export function serializePayload<K extends PayloadType>(type: K, raw: PayloadInp
     }
     case 'location': {
       const input = value as PayloadInputs['location'];
-      const label = input.label ? `?q=${input.latitude},${input.longitude}(${encodeURIComponent(input.label)})` : '';
+      const label = input.label ? `?q=${input.latitude},${input.longitude}(${encodeGeoLabel(input.label)})` : '';
       return `geo:${input.latitude},${input.longitude}${label}`;
     }
     case 'event': {
       const input = value as PayloadInputs['event'];
-      if (new Date(input.end).valueOf() < new Date(input.start).valueOf()) {
+      if (new Date(input.end).valueOf() <= new Date(input.start).valueOf()) {
         throw new Error('Event end must be after its start.');
       }
       const rows = [
@@ -131,7 +154,7 @@ export const defaultPayloadInputs: PayloadInputs = {
   phone: { phone: '+1 555 0100' },
   sms: { phone: '+1 555 0100', message: 'Hello' },
   whatsapp: { phone: '+1 555 0100', message: 'Hello' },
-  wifi: { ssid: 'My WiFi', password: '', security: 'WPA', hidden: false },
+  wifi: { ssid: 'My WiFi', password: '', security: 'nopass', hidden: false },
   vcard: { firstName: 'Alex', lastName: 'Morgan', organization: '', title: '', phone: '', email: '', website: '' },
   location: { latitude: 40.7128, longitude: -74.006, label: '' },
   event: { title: 'Event', start: '2026-09-01T09:00', end: '2026-09-01T10:00', location: '', description: '' },

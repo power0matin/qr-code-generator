@@ -9,19 +9,24 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: 10.15.0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -30,19 +35,20 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: quality
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: 10.15.0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @moduqr/web build
-      - run: pnpm exec playwright install --with-deps chromium firefox webkit
-      - run: pnpm test:e2e
+      - run: pnpm --filter @moduqr/web exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm --filter @moduqr/web test:e2e
         env:
           CI: 'true'

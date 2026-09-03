@@ -1,8 +1,115 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_STYLE } from '@moduqr/renderer';
-import { evaluateSafety } from './index';
+import { contrastRatio, evaluateSafety } from './index';
 
 describe('scan safety', () => {
-  it('rewards a high-contrast baseline', () => expect(evaluateSafety({ payload: 'https://example.com', style: DEFAULT_STYLE, outputWidth: 640 }).score).toBeGreaterThanOrEqual(85));
-  it('penalizes failed decode', () => expect(evaluateSafety({ payload: 'hello', style: DEFAULT_STYLE, outputWidth: 640, decoded: false }).score).toBeLessThan(70));
+  it('calculates WCAG-style contrast for hex colors', () => {
+    expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 1);
+  });
+
+  it('penalizes a failed rendered decode', () => {
+    const report = evaluateSafety({ payload: 'https://example.com', style: DEFAULT_STYLE, outputWidth: 640, decoded: false });
+    expect(report.issues.some((issue) => issue.code === 'DECODE_FAILED')).toBe(true);
+    expect(report.score).toBeLessThan(70);
+  });
+
+  it('returns a controlled encode failure for payloads beyond QR capacity', () => {
+    const report = evaluateSafety({ payload: 'x'.repeat(50_000), style: DEFAULT_STYLE, outputWidth: 640, decoded: null });
+    expect(report.score).toBe(0);
+    expect(report.grade).toBe('Poor');
+    expect(report.issues.some((issue) => issue.code === 'ENCODE_FAILED')).toBe(true);
+  });
+
+  it('includes logo padding in obstruction risk', () => {
+    const report = evaluateSafety({
+      payload: 'https://example.com',
+      outputWidth: 640,
+      style: {
+        ...DEFAULT_STYLE,
+        errorCorrection: 'H',
+        logo: {
+          ...DEFAULT_STYLE.logo,
+          dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
+          mimeType: 'image/png',
+          size: 0.2,
+          padding: 14,
+          cutout: true,
+        },
+      },
+    });
+    expect(report.issues.some((issue) => issue.code === 'LOGO_OBSTRUCTION')).toBe(true);
+  });
+
+  it('keeps logo obstruction geometry independent from raster export resolution', () => {
+    const style = {
+      ...DEFAULT_STYLE,
+      errorCorrection: 'H' as const,
+      logo: {
+        ...DEFAULT_STYLE.logo,
+        dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
+        mimeType: 'image/png' as const,
+        size: 0.2,
+        padding: 16,
+        cutout: true,
+      },
+    };
+
+    const small = evaluateSafety({ payload: 'https://example.com', style, outputWidth: 320 });
+    const large = evaluateSafety({ payload: 'https://example.com', style, outputWidth: 1600 });
+    const hasLogoRisk = (report: ReturnType<typeof evaluateSafety>): boolean => report.issues.some((issue) => issue.code === 'LOGO_OBSTRUCTION');
+
+    expect(hasLogoRisk(small)).toBe(true);
+    expect(hasLogoRisk(large)).toBe(true);
+  });
+
+  it('checks custom finder colors against background gradients', () => {
+    const report = evaluateSafety({
+      payload: 'https://example.com',
+      outputWidth: 640,
+      style: {
+        ...DEFAULT_STYLE,
+        backgroundGradient: {
+          type: 'linear',
+          angle: 0,
+          stops: [
+            { offset: 0, color: '#ffffff' },
+            { offset: 1, color: '#f8fafc' },
+          ],
+        },
+        finderOverrides: {
+          ...DEFAULT_STYLE.finderOverrides,
+          topLeft: { ...DEFAULT_STYLE.finderOverrides.topLeft, outerColor: '#f1f5f9' },
+        },
+      },
+    });
+    expect(report.issues.some((issue) => issue.code === 'FINDER_CONTRAST')).toBe(true);
+  });
+
+  it('checks inherited finder foreground even when module gradients are dark', () => {
+    const report = evaluateSafety({
+      payload: 'https://example.com',
+      outputWidth: 640,
+      style: {
+        ...DEFAULT_STYLE,
+        foreground: '#f1f5f9',
+        gradient: {
+          type: 'linear',
+          angle: 45,
+          stops: [
+            { offset: 0, color: '#111827' },
+            { offset: 1, color: '#312e81' },
+          ],
+        },
+        backgroundGradient: {
+          type: 'linear',
+          angle: 0,
+          stops: [
+            { offset: 0, color: '#ffffff' },
+            { offset: 1, color: '#f8fafc' },
+          ],
+        },
+      },
+    });
+    expect(report.issues.some((issue) => issue.code === 'FINDER_CONTRAST')).toBe(true);
+  });
 });

@@ -6,12 +6,18 @@ import { renderQR } from '@moduqr/renderer';
 import { evaluateSafety } from '@moduqr/scan-validator';
 import { DESIGN_SCHEMA_VERSION, type QRDesignDocument } from '@moduqr/shared';
 import { Download, FileDown, Redo2, RotateCcw, Save, Sparkles, Undo2, Upload } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DesignPanel } from './design-panel';
 import { PayloadEditor } from './payload-editor';
 import { exportQR, verifyRenderedSvg, type ExportFormat } from '@/lib/export';
-import { makeProject, saveProject } from '@/lib/projects';
+import { getProject, makeProject, saveProject } from '@/lib/projects';
 import { useStudioStore } from '@/lib/studio-store';
+
+interface ActiveProject {
+  readonly id: string;
+  readonly createdAt: string;
+  readonly favorite: boolean;
+}
 
 export function Studio() {
   const payloadType = useStudioStore((state) => state.payloadType);
@@ -25,41 +31,165 @@ export function Studio() {
   const reset = useStudioStore((state) => state.reset);
   const setStyle = useStudioStore((state) => state.setStyle);
   const load = useStudioStore((state) => state.load);
-  const rendered = useMemo(() => renderQR(payload || ' ', style), [payload, style]);
-  const [decoded, setDecoded] = useState<boolean | null>(null);
+
+  const renderState = useMemo(() => {
+    try {
+      return { rendered: renderQR(payload, style), error: null } as const;
+    } catch (error) {
+      return { rendered: null, error: error instanceof Error ? error.message : 'The QR could not be rendered.' } as const;
+    }
+  }, [payload, style]);
+  const rendered = renderState.rendered;
+
+  const [decodeSnapshot, setDecodeSnapshot] = useState<{ readonly svg: string; readonly payload: string; readonly result: boolean } | null>(null);
+  const decoded = rendered && decodeSnapshot?.svg === rendered.svg && decodeSnapshot.payload === payload ? decodeSnapshot.result : null;
   const [status, setStatus] = useState('');
   const [format, setFormat] = useState<ExportFormat>('png');
   const [width, setWidth] = useState(1024);
   const [transparent, setTransparent] = useState(false);
   const [projectName, setProjectName] = useState('Untitled QR');
-  const [activeProject, setActiveProject] = useState<{ readonly id: string; readonly createdAt: string } | null>(null);
+  const [activeProject, setActiveProject] = useState<ActiveProject | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('moduqr-load-project');
-    if (!stored) return;
-    sessionStorage.removeItem('moduqr-load-project');
+    let projectId: string | null = null;
+    let legacyStored: string | null = null;
     try {
-      const project = parseDesignDocument(JSON.parse(stored) as unknown);
-      setProjectName(project.name);
-      setActiveProject({ id: project.id, createdAt: project.createdAt });
-      load({ payloadType: project.payloadType, payload: project.payload, style: project.style, presetId: project.presetId });
-      setStatus('Local project loaded.');
+      projectId = window.sessionStorage.getItem('moduqr-load-project-id');
+      legacyStored = window.sessionStorage.getItem('moduqr-load-project');
     } catch {
-      setStatus('The selected local project could not be loaded.');
+      return;
     }
+    if (!projectId && !legacyStored) return;
+
+    let active = true;
+    queueMicrotask(() => {
+      void (async () => {
+        try {
+          const project = projectId
+            ? await getProject(projectId)
+            : parseDesignDocument(JSON.parse(legacyStored ?? '') as unknown);
+          if (!project) throw new Error('The selected local project no longer exists.');
+          if (!active) return;
+          try {
+            if (projectId) window.sessionStorage.removeItem('moduqr-load-project-id');
+            if (legacyStored) window.sessionStorage.removeItem('moduqr-load-project');
+          } catch {
+            // The project is already loaded in memory; storage cleanup is best-effort only.
+          }
+          setProjectName(project.name);
+          setActiveProject({ id: project.id, createdAt: project.createdAt, favorite: project.favorite });
+          load({ payloadType: project.payloadType, payload: project.payload, style: project.style, presetId: project.presetId });
+          setStatus('Local project loaded.');
+        } catch {
+          if (active) setStatus('The selected local project could not be loaded.');
+        }
+      })();
+    });
+
+    return () => { active = false; };
   }, [load]);
 
   useEffect(() => {
+    if (!rendered) return;
     let active = true;
-    setDecoded(null);
+    const svg = rendered.svg;
+    const currentPayload = payload;
     const timer = setTimeout(() => {
-      void verifyRenderedSvg(rendered.svg, payload, 768).then((result) => { if (active) setDecoded(result); }).catch(() => { if (active) setDecoded(false); });
+      void verifyRenderedSvg(svg, currentPayload, 768)
+        .then((result) => { if (active) setDecodeSnapshot({ svg, payload: currentPayload, result }); })
+        .catch(() => { if (active) setDecodeSnapshot({ svg, payload: currentPayload, result: false }); });
     }, 220);
-    return () => { active = false; clearTimeout(timer); };
-  }, [rendered.svg, payload]);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [payload, rendered]);
 
-  const safety = useMemo(() => evaluateSafety({ payload, style, outputWidth: width, decoded }), [payload, style, width, decoded]);
+  const safetyRenderWidth = rendered?.viewBoxWidth ?? 640;
+  const safety = useMemo(() => evaluateSafety({ payload, style, outputWidth: width, renderWidth: safetyRenderWidth, decoded }), [payload, style, width, decoded, safetyRenderWidth]);
+
+  const currentDocument = (): QRDesignDocument => {
+    const now = new Date().toISOString();
+    return {
+      version: DESIGN_SCHEMA_VERSION,
+      id: activeProject?.id ?? crypto.randomUUID(),
+      name: projectName.trim() || 'Untitled QR',
+      payloadType,
+      payload,
+      style,
+      presetId,
+      favorite: activeProject?.favorite ?? false,
+      createdAt: activeProject?.createdAt ?? now,
+      updatedAt: now,
+    };
+  };
+
+  const saveCurrent = useCallback(async () => {
+    try {
+      const now = new Date().toISOString();
+      const project = activeProject
+        ? {
+            version: DESIGN_SCHEMA_VERSION,
+            id: activeProject.id,
+            name: projectName.trim() || 'Untitled QR',
+            payloadType,
+            payload,
+            style,
+            presetId,
+            favorite: activeProject.favorite,
+            createdAt: activeProject.createdAt,
+            updatedAt: now,
+          } satisfies QRDesignDocument
+        : makeProject({ name: projectName.trim() || 'Untitled QR', payloadType, payload, style, presetId, favorite: false });
+      await saveProject(project);
+      setActiveProject({ id: project.id, createdAt: project.createdAt, favorite: project.favorite });
+      setStatus('Saved locally on this device.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Could not save this project.');
+    }
+  }, [activeProject, payload, payloadType, presetId, projectName, style]);
+
+  const exportDesignJson = () => {
+    try {
+      const documentValue = parseDesignDocument(currentDocument());
+      const blob = new Blob([JSON.stringify(documentValue, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${slug(projectName)}.moduqr.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      setStatus('Design JSON validated and downloaded.');
+    } catch (error) {
+      setStatus(error instanceof Error ? `Design JSON blocked: ${error.message}` : 'Design JSON could not be validated.');
+    }
+  };
+
+  const importDesign = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      if (file.size > 4_000_000) throw new Error('Design file is too large.');
+      if (file.size === 0) throw new Error('Design file is empty.');
+      const documentValue = parseDesignDocument(JSON.parse(await file.text()) as unknown);
+      setProjectName(documentValue.name);
+      setActiveProject(null);
+      load({ payloadType: documentValue.payloadType, payload: documentValue.payload, style: documentValue.style, presetId: documentValue.presetId });
+      setStatus('Design imported as a new local design.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Invalid ModuQR design file.');
+    } finally {
+      if (importRef.current) importRef.current.value = '';
+    }
+  };
+
+  const surprise = useCallback(() => {
+    const seed = [...payload].reduce((sum, char) => (sum + char.charCodeAt(0)) % 100003, 0) + Date.now();
+    const selected = PRESETS[seed % PRESETS.length];
+    if (selected) setStyle(selected.style, selected.id);
+  }, [payload, setStyle]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -72,69 +202,13 @@ export function Studio() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
-
-  const currentDocument = (): QRDesignDocument => {
-    const now = new Date().toISOString();
-    return {
-      version: DESIGN_SCHEMA_VERSION,
-      id: activeProject?.id ?? crypto.randomUUID(),
-      name: projectName.trim() || 'Untitled QR',
-      payloadType,
-      payload,
-      style,
-      presetId,
-      favorite: false,
-      createdAt: activeProject?.createdAt ?? now,
-      updatedAt: now,
-    };
-  };
-
-  const saveCurrent = async () => {
-    try {
-      const now = new Date().toISOString();
-      const project = activeProject ? { version: DESIGN_SCHEMA_VERSION, id: activeProject.id, name: projectName.trim() || 'Untitled QR', payloadType, payload, style, presetId, favorite: false, createdAt: activeProject.createdAt, updatedAt: now } satisfies QRDesignDocument : makeProject({ name: projectName.trim() || 'Untitled QR', payloadType, payload, style, presetId, favorite: false });
-      await saveProject(project);
-      setActiveProject({ id: project.id, createdAt: project.createdAt });
-      setStatus('Saved locally on this device.');
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Could not save this project.');
-    }
-  };
-
-  const exportDesignJson = () => {
-    const blob = new Blob([JSON.stringify(currentDocument(), null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${slug(projectName)}.moduqr.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const importDesign = async (file: File | undefined) => {
-    if (!file) return;
-    try {
-      if (file.size > 4_000_000) throw new Error('Design file is too large.');
-      const documentValue = parseDesignDocument(JSON.parse(await file.text()) as unknown);
-      setProjectName(documentValue.name);
-      setActiveProject(null);
-      load({ payloadType: documentValue.payloadType, payload: documentValue.payload, style: documentValue.style, presetId: documentValue.presetId });
-      setStatus('Design imported.');
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Invalid ModuQR design file.');
-    } finally {
-      if (importRef.current) importRef.current.value = '';
-    }
-  };
-
-  const surprise = () => {
-    const seed = [...payload].reduce((sum, char) => (sum + char.charCodeAt(0)) % 100003, 0) + Date.now();
-    const selected = PRESETS[seed % PRESETS.length];
-    if (selected) setStyle(selected.style, selected.id);
-  };
+  }, [redo, saveCurrent, surprise, undo]);
 
   const doExport = async () => {
+    if (!rendered) {
+      setStatus(`Export blocked: ${renderState.error ?? 'the QR could not be rendered.'}`);
+      return;
+    }
     try {
       setStatus('Verifying export…');
       await exportQR({ svg: rendered.svg, payload, format, width, filename: slug(projectName), transparent });
@@ -147,18 +221,32 @@ export function Studio() {
   return <section className="studio-shell" aria-label="QR code designer">
     <div className="studio-toolbar">
       <div className="title-group"><h1>QR Studio</h1><p>{payloadType.toUpperCase()} · local-only static QR</p></div>
-      <button type="button" className="button ghost" onClick={undo} disabled={past.length === 0} title="Undo (Ctrl/⌘ Z)"><Undo2 size={16}/><span>Undo</span></button>
-      <button type="button" className="button ghost" onClick={redo} disabled={future.length === 0} title="Redo"><Redo2 size={16}/><span>Redo</span></button>
-      <button type="button" className="button ghost" onClick={surprise} title="Surprise me (Alt R)"><Sparkles size={16}/><span>Surprise</span></button>
-      <button type="button" className="button ghost" onClick={reset}><RotateCcw size={16}/><span>Reset</span></button>
+      <button type="button" className="button ghost" onClick={undo} disabled={past.length === 0} aria-label="Undo design" title="Undo (Ctrl/⌘ Z)"><Undo2 size={16}/><span>Undo</span></button>
+      <button type="button" className="button ghost" onClick={redo} disabled={future.length === 0} aria-label="Redo design" title="Redo"><Redo2 size={16}/><span>Redo</span></button>
+      <button type="button" className="button ghost" onClick={surprise} aria-label="Surprise me" title="Surprise me (Alt R)"><Sparkles size={16}/><span>Surprise</span></button>
+      <button type="button" className="button ghost" onClick={reset} aria-label="Reset design" title="Reset design"><RotateCcw size={16}/><span>Reset</span></button>
     </div>
     <div className="studio-grid">
       <aside className="panel"><div className="panel-scroll"><PayloadEditor /></div></aside>
       <section className="panel canvas-panel" aria-label="Live QR preview">
-        <div className="canvas-stage"><div className="qr-paper" dangerouslySetInnerHTML={{ __html: rendered.svg }}/></div>
-        <div className="canvas-meta"><small>Version {Math.floor((rendered.matrixSize - 17) / 4)} · {rendered.matrixSize}×{rendered.matrixSize} modules</small><span className="score-pill">{decoded === null ? 'Checking…' : decoded ? '✓ Decodes' : 'Decode failed'}</span></div>
+        <div className="canvas-stage">
+          {rendered
+            ? <div className="qr-paper" dangerouslySetInnerHTML={{ __html: rendered.svg }}/>
+            : <div className="scanner-result render-error" role="alert" aria-label="QR render error"><strong>QR cannot be rendered</strong><p>{renderState.error}</p><p className="help">Shorten the payload or reduce encoded data before exporting.</p></div>}
+        </div>
+        <div className="canvas-meta">
+          <small>{rendered ? `Version ${Math.floor((rendered.matrixSize - 17) / 4)} · ${rendered.matrixSize}×${rendered.matrixSize} modules` : 'Encoding unavailable for this payload'}</small>
+          <span className="score-pill" aria-label="Decode status" aria-live="polite">{!rendered ? 'Encode failed' : decoded === null ? 'Checking…' : decoded ? '✓ Decodes' : 'Decode failed'}</span>
+        </div>
       </section>
-      <aside className="panel"><div className="panel-scroll"><DesignPanel /><div className="divider"/><Safety score={safety.score} grade={safety.grade} issues={safety.issues}/><div className="divider"/><ExportPanel format={format} setFormat={setFormat} width={width} setWidth={setWidth} transparent={transparent} setTransparent={setTransparent} projectName={projectName} setProjectName={setProjectName} onExport={() => void doExport()} onSave={() => void saveCurrent()} onExportJson={exportDesignJson} onImport={() => importRef.current?.click()} status={status}/><input ref={importRef} hidden type="file" accept="application/json,.json" onChange={(event) => void importDesign(event.target.files?.[0])}/></div></aside>
+      <aside className="panel"><div className="panel-scroll">
+        <DesignPanel />
+        <div className="divider"/>
+        <Safety score={safety.score} grade={safety.grade} issues={safety.issues}/>
+        <div className="divider"/>
+        <ExportPanel format={format} setFormat={setFormat} width={width} setWidth={setWidth} transparent={transparent} setTransparent={setTransparent} projectName={projectName} setProjectName={setProjectName} onExport={() => void doExport()} onSave={() => void saveCurrent()} onExportJson={exportDesignJson} onImport={() => importRef.current?.click()} status={status} canExport={rendered !== null}/>
+        <input ref={importRef} hidden type="file" accept="application/json,.json" onChange={(event) => void importDesign(event.target.files?.[0])}/>
+      </div></aside>
     </div>
   </section>;
 }
@@ -167,8 +255,8 @@ function Safety({ score, grade, issues }: Readonly<{ score: number; grade: strin
   return <section aria-labelledby="safety-title"><div className="panel-header"><div><h2 id="safety-title">Scan Safety</h2><p>Heuristics + rendered decode check.</p></div></div><div className="safety-score"><div className="score-ring" style={{ '--score': score } as React.CSSProperties}><strong>{score}</strong></div><div><strong>{grade}</strong><p className="help">A failing real decode carries the strongest penalty.</p></div></div>{issues.length === 0 ? <div className="success-box">No safety issues detected at this output size.</div> : <div className="issue-list">{issues.map((issue) => <div className={`issue ${issue.severity}`} key={issue.code}><strong>{issue.message}</strong><span>{issue.fix}</span></div>)}</div>}</section>;
 }
 
-function ExportPanel(props: Readonly<{ format: ExportFormat; setFormat: (value: ExportFormat) => void; width: number; setWidth: (value: number) => void; transparent: boolean; setTransparent: (value: boolean) => void; projectName: string; setProjectName: (value: string) => void; onExport: () => void; onSave: () => void; onExportJson: () => void; onImport: () => void; status: string }>) {
-  return <section aria-labelledby="export-title"><div className="panel-header"><div><h2 id="export-title">Export & project</h2><p>Every download is preflight-decoded.</p></div></div><div className="form-stack"><div className="field"><label htmlFor="project-name">Project name</label><input id="project-name" className="input" value={props.projectName} onChange={(event) => props.setProjectName(event.target.value)} maxLength={120}/></div><div className="field"><label htmlFor="format">Format</label><select id="format" className="select" value={props.format} onChange={(event) => props.setFormat(event.target.value as ExportFormat)}><option value="png">PNG</option><option value="svg">SVG</option><option value="jpeg">JPEG</option><option value="webp">WebP</option><option value="pdf">PDF</option></select></div><div className="field"><label htmlFor="resolution">Resolution</label><input id="resolution" className="input" type="number" inputMode="numeric" min={256} max={8192} step={1} value={props.width} onChange={(event) => props.setWidth(Math.max(256, Math.min(8192, Number(event.target.value) || 256)))}/><div className="style-grid" aria-label="Export resolution presets">{[512,1024,2048,4096].map((value) => <button type="button" className="button ghost" key={value} aria-pressed={props.width === value} onClick={() => props.setWidth(value)}>{value}px</button>)}</div><span className="help">Custom: 256–8192 px · at 300 DPI this is approximately {(props.width / 300 * 25.4).toFixed(1)} mm wide before frame aspect-ratio adjustment.</span></div><label className="field-label"><input type="checkbox" checked={props.transparent} disabled={props.format === 'jpeg' || props.format === 'pdf'} onChange={(event) => props.setTransparent(event.target.checked)}/> Transparent background</label><button type="button" className="button accent" onClick={props.onExport}><Download size={16}/> Verify & download</button><button type="button" className="button" onClick={props.onSave}><Save size={16}/> Save locally</button><div className="style-grid"><button type="button" className="button ghost" onClick={props.onExportJson}><FileDown size={15}/> JSON</button><button type="button" className="button ghost" onClick={props.onImport}><Upload size={15}/> Import</button></div>{props.status ? <div className="help" aria-live="polite">{props.status}</div> : null}</div></section>;
+function ExportPanel(props: Readonly<{ format: ExportFormat; setFormat: (value: ExportFormat) => void; width: number; setWidth: (value: number) => void; transparent: boolean; setTransparent: (value: boolean) => void; projectName: string; setProjectName: (value: string) => void; onExport: () => void; onSave: () => void; onExportJson: () => void; onImport: () => void; status: string; canExport: boolean }>) {
+  return <section aria-labelledby="export-title"><div className="panel-header"><div><h2 id="export-title">Export & project</h2><p>Every download is preflight-decoded.</p></div></div><div className="form-stack"><div className="field"><label htmlFor="project-name">Project name</label><input id="project-name" className="input" value={props.projectName} onChange={(event) => props.setProjectName(event.target.value)} maxLength={120}/></div><div className="field"><label htmlFor="format">Format</label><select id="format" className="select" value={props.format} onChange={(event) => props.setFormat(event.target.value as ExportFormat)}><option value="png">PNG</option><option value="svg">SVG</option><option value="jpeg">JPEG</option><option value="webp">WebP</option><option value="pdf">PDF</option></select></div><div className="field"><label htmlFor="resolution">Resolution</label><input id="resolution" className="input" type="number" inputMode="numeric" min={256} max={8192} step={1} value={props.width} onChange={(event) => props.setWidth(Math.max(256, Math.min(8192, Number(event.target.value) || 256)))}/><div className="style-grid" aria-label="Export resolution presets">{[512,1024,2048,4096].map((value) => <button type="button" className="button ghost" key={value} aria-pressed={props.width === value} onClick={() => props.setWidth(value)}>{value}px</button>)}</div><span className="help">Custom: 256–8192 px · at 300 DPI this is approximately {(props.width / 300 * 25.4).toFixed(1)} mm wide before frame aspect-ratio adjustment.</span></div><label className="field-label"><input type="checkbox" checked={props.transparent} disabled={props.format === 'jpeg' || props.format === 'pdf'} onChange={(event) => props.setTransparent(event.target.checked)}/> Transparent background</label><button type="button" className="button accent" onClick={props.onExport} disabled={!props.canExport}><Download size={16}/> Verify & download</button><button type="button" className="button" onClick={props.onSave}><Save size={16}/> Save locally</button><div className="style-grid"><button type="button" className="button ghost" onClick={props.onExportJson}><FileDown size={15}/> JSON</button><button type="button" className="button ghost" onClick={props.onImport}><Upload size={15}/> Import</button></div>{props.status ? <div className="help" aria-live="polite">{props.status}</div> : null}</div></section>;
 }
 
 function slug(value: string): string {
