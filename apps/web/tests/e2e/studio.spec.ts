@@ -55,10 +55,16 @@ test('smart input canonicalizes a detected email into an email QR payload', asyn
   await expectQrToChange(page, initialQr);
   await expectDecodable(page);
 
-  await page.locator('.qr-paper').screenshot({ path: file });
+  await page.locator('#format').selectOption('png');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Verify & download' }).click();
+  const download = await downloadPromise;
+  await download.saveAs(file);
+
   await page.goto('/scanner');
   await page.locator('input[type=file]').setInputFiles(file);
-  await expect(page.getByText('mailto:hello@example.com', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: 'Decoded content' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('mailto:hello@example.com', { exact: true })).toBeVisible();
 });
 
 test('renderer output round-trips through image scanner', async ({ page }, testInfo) => {
