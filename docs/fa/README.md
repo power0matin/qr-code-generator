@@ -6,7 +6,7 @@ ModuQR یک استودیوی متن‌باز برای ساخت، طراحی و �
 
 پروژه در مرحله‌ی توسعه‌ی pre-1.0 و نسخه‌ی Repository برابر `0.1.0` است. اولین Release عمومی فقط پس از پاس کامل نصب تمیز Dependencyها، TypeScript، Lint، Unit Test، Production Build، Playwright، Accessibility و Dependency Audit با برچسب `v0.1.0` منتشر می‌شود. شماره‌ی Phaseها به Major Version نگاشت نمی‌شود و `1.0.0` فقط برای زمانی رزرو است که APIها، Schemaها و قراردادهای سازگاری پروژه واقعاً پایدار شده باشند.
 
-Phase 1 پایه‌ی Static Studio را ساخته و Phase 2 در حال توسعه است. پایه‌ی فعلی Phase 2 شامل Connected/Fluid neighbour-aware، کنترل مستقل Finderها، Gradientهای چندمرحله‌ای و migration فایل طراحی از schema v1 به v2 است؛ قابلیت‌های باقی‌مانده‌ی Phase 2 تا زمانی که واقعاً پیاده‌سازی و تست نشده‌اند به‌عنوان Feature آماده معرفی نمی‌شوند.
+پیاده‌سازی Phase 2 اکنون شامل Connected/Fluid neighbour-aware، کنترل مستقل Finderها، Gradientهای چندمرحله‌ای، migration فایل طراحی از schema v1 و v2 به v3، Presetهای حرفه‌ای، پروژه‌های محلی، Scanner دوربین/تصویر، Safety Simulation، اشتراک‌گذاری فقطِ استایل و Batch محلی تا ۵۰۰ ردیف است. انتشار نهایی همچنان به عبور کامل از دروازه‌ی تست و CI وابسته است.
 
 ## امکانات فعلی
 
@@ -16,10 +16,11 @@ Phase 1 پایه‌ی Static Studio را ساخته و Phase 2 در حال تو�
 - کنترل شکل Module و Finder، Connected/Fluid، رنگ، Gradient، Quiet Zone و Error Correction
 - کنترل مستقل Finder بالا-چپ، بالا-راست و پایین-چپ
 - لوگوی PNG/JPEG/WebP/SVG با validation و Sanitization و محافظت از Finderها
-- 24 Preset داده‌محور؛ مجموعه‌ی 50+ Preset هنوز milestone بعدی Phase 2 است
+- 60 Preset داده‌محور با جست‌وجو، دسته‌بندی و Favorite محلی
 - Scan Safety Score همراه با Decode واقعی خروجی و مدیریت کنترل‌شده‌ی payload بیش از ظرفیت
 - خروجی SVG، PNG، JPEG، WebP و PDF
-- Scanner تصویری و Scan → Redesign بدون قرار دادن Payload حساس در URL
+- Scanner دوربین/تصویر و Scan → Redesign بدون قرار دادن Payload حساس در URL
+- Batch محلی CSV/TSV/JSON تا ۵۰۰ ردیف با Worker، Template، خروجی ZIP/PDF و بررسی ظرفیت فایل
 - ذخیره‌ی Local Project در IndexedDB و Import/Export فایل JSON نسخه‌دار
 - Light/Dark/System، PWA، Offline reuse، SEO و تست‌های خودکار
 

@@ -56,7 +56,13 @@ function canvasBlob(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
 async function prepareInWorker(text: string, format: BatchInputFormat, payloadTemplate: string, filenameTemplate: string): Promise<readonly BatchJob[]> {
   if (typeof Worker === 'undefined') return prepareBatchJobs(text, format, payloadTemplate, filenameTemplate);
   return new Promise((resolve, reject) => {
-    const worker = new Worker('/batch-worker.js');
+    let worker: Worker;
+    try { worker = new Worker('/batch-worker.js'); }
+    catch {
+      try { resolve(prepareBatchJobs(text, format, payloadTemplate, filenameTemplate)); }
+      catch (error) { reject(error); }
+      return;
+    }
     const timer = window.setTimeout(() => {
       worker.terminate();
       reject(new Error('Batch worker timed out.'));
@@ -79,7 +85,6 @@ async function prepareInWorker(text: string, format: BatchInputFormat, payloadTe
 
 export function BatchGenerator() {
   const [format, setFormat] = useState<BatchInputFormat>('csv');
-  const [input, setInput] = useState(sampleCsv);
   const [payloadTemplate, setPayloadTemplate] = useState('{{url}}');
   const [filenameTemplate, setFilenameTemplate] = useState('{{name}}-{{index}}');
   const [presetId, setPresetId] = useState('ink');
@@ -88,19 +93,34 @@ export function BatchGenerator() {
   const [status, setStatus] = useState('');
   const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [capacity, setCapacity] = useState<CapacityResult | null>(null);
   const cancelled = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const capacityInput = useRef<HTMLInputElement>(null);
+  const datasetInput = useRef<HTMLTextAreaElement>(null);
 
   const preset = useMemo(() => findPreset(presetId) ?? PRESETS[0], [presetId]);
 
   const prepare = async (): Promise<readonly BatchJob[]> => {
+    setPreparing(true);
     setStatus('Preparing rows in a Web Worker…');
-    const prepared = await prepareInWorker(input, format, payloadTemplate, filenameTemplate);
-    setJobs(prepared);
-    setStatus(`${prepared.length} rows prepared. Preview shows the first 10.`);
-    return prepared;
+    try {
+      // Keep the large dataset in the DOM. This avoids a mobile-browser race
+      // where a controlled textarea can briefly expose the previous React state
+      // when the user prepares immediately after filling it.
+      const dataset = datasetInput.current?.value ?? sampleCsv;
+      const prepared = await prepareInWorker(dataset, format, payloadTemplate, filenameTemplate);
+      setJobs(prepared);
+      setStatus(`${prepared.length} rows prepared. Preview shows the first 10.`);
+      return prepared;
+    } catch (error) {
+      setJobs([]);
+      setStatus(error instanceof Error ? error.message : 'Batch data could not be prepared.');
+      throw error;
+    } finally {
+      setPreparing(false);
+    }
   };
 
   const onDatasetFile = async (file: File | undefined) => {
@@ -110,7 +130,8 @@ export function BatchGenerator() {
       const extension = file.name.split('.').pop()?.toLowerCase();
       const detected: BatchInputFormat = extension === 'json' ? 'json' : extension === 'tsv' ? 'tsv' : 'csv';
       setFormat(detected);
-      setInput(await file.text());
+      const text = await file.text();
+      if (datasetInput.current) datasetInput.current.value = text;
       setJobs([]);
       setStatus(`${file.name} loaded locally as ${detected.toUpperCase()}.`);
     } catch (error) {
@@ -222,11 +243,11 @@ export function BatchGenerator() {
       <div className="panel-header"><div><span className="eyebrow">Phase 2 · local batch</span><h1 id="batch-title">Batch QR Generator</h1><p>Prepare up to 500 QR codes from CSV, TSV or JSON without uploading the dataset.</p></div></div>
       <div className="form-stack">
         <div className="batch-toolbar"><div className="field"><label htmlFor="batch-format">Input format</label><select id="batch-format" className="select" value={format} onChange={(event) => { setFormat(event.target.value as BatchInputFormat); setJobs([]); }}><option value="csv">CSV</option><option value="tsv">TSV</option><option value="json">JSON</option></select></div><button className="button" type="button" onClick={() => fileInput.current?.click()}><FileUp size={15}/>Load file</button><input ref={fileInput} hidden type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" onChange={(event) => void onDatasetFile(event.target.files?.[0])}/></div>
-        <div className="field"><label htmlFor="batch-data">Dataset</label><textarea id="batch-data" className="textarea batch-textarea" value={input} onChange={(event) => { setInput(event.target.value); setJobs([]); }} spellCheck={false}/><span className="help">CSV/TSV first row is treated as headers. JSON accepts an array of objects or primitive values.</span></div>
+        <div className="field"><label htmlFor="batch-data">Dataset</label><textarea ref={datasetInput} id="batch-data" className="textarea batch-textarea" defaultValue={sampleCsv} onInput={() => setJobs([])} spellCheck={false}/><span className="help">CSV/TSV first row is treated as headers. JSON accepts an array of objects or primitive values.</span></div>
         <div className="field"><label htmlFor="payload-template">Payload template</label><input id="payload-template" className="input" value={payloadTemplate} onChange={(event) => { setPayloadTemplate(event.target.value); setJobs([]); }} placeholder="https://example.com/{{slug}}"/><span className="help">Use variables such as <code>{'{{url}}'}</code>, <code>{'{{name}}'}</code> and <code>{'{{index}}'}</code>.</span></div>
         <div className="field"><label htmlFor="filename-template">Filename template</label><input id="filename-template" className="input" value={filenameTemplate} onChange={(event) => { setFilenameTemplate(event.target.value); setJobs([]); }} placeholder="qr-{{index}}"/></div>
         <div className="batch-toolbar"><div className="field"><label htmlFor="batch-preset">Preset</label><select id="batch-preset" className="select" value={presetId} onChange={(event) => setPresetId(event.target.value)}>{PRESETS.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.category}</option>)}</select></div><div className="field"><label htmlFor="batch-output">Output</label><select id="batch-output" className="select" value={output} onChange={(event) => setOutput(event.target.value as BatchOutput)}><option value="svg-zip">SVG ZIP</option><option value="png-zip">PNG ZIP</option><option value="pdf-sheet">PDF sheet</option></select></div></div>
-        <div className="project-actions"><button className="button" type="button" disabled={busy} onClick={() => void prepare()}><FileCheck2 size={15}/>Prepare & preview</button><button className="button accent" type="button" disabled={busy} onClick={() => void generate()}>{busy ? <LoaderCircle className="spin" size={15}/> : output === 'pdf-sheet' ? <Download size={15}/> : <FileArchive size={15}/>}Generate</button>{busy ? <button className="button danger" type="button" onClick={() => { cancelled.current = true; }}><OctagonX size={15}/>Cancel</button> : null}</div>
+        <div className="project-actions"><button className="button" type="button" disabled={busy || preparing} onClick={() => { void prepare().catch(() => undefined); }}><FileCheck2 size={15}/>{preparing ? 'Preparing…' : 'Prepare & preview'}</button><button className="button accent" type="button" disabled={busy || preparing} onClick={() => void generate()}>{busy ? <LoaderCircle className="spin" size={15}/> : output === 'pdf-sheet' ? <Download size={15}/> : <FileArchive size={15}/>}Generate</button>{busy ? <button className="button danger" type="button" onClick={() => { cancelled.current = true; }}><OctagonX size={15}/>Cancel</button> : null}</div>
         {busy ? <div className="progress-wrap" aria-live="polite"><progress max={100} value={progress}/><span>{progress}%</span></div> : null}
         {status ? <p className="help" role="status">{status}</p> : null}
       </div>
