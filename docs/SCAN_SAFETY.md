@@ -27,4 +27,4 @@ The renderer also keeps Finder patterns solid when module gradients are enabled 
 
 ## Limits
 
-The Phase 2 foundation understands advanced module/background gradients, neighbour-aware modules and independent finder colors, but it does not yet simulate printer dot gain, perspective distortion, blur, rotation, low-light camera noise, paper reflectivity or real viewing distance. Those multi-condition decode simulations remain a later Safety v2 milestone.
+The Phase 2 foundation understands advanced module/background gradients, neighbour-aware modules and independent finder colors. The local Safety v2 simulations currently exercise baseline rendering, blur, scale changes, rotation and reduced contrast. These deterministic checks are advisory: they do not simulate every printer, camera, paper surface, lighting condition or real viewing distance, and they are not a guarantee of physical scanability.

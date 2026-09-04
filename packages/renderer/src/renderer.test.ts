@@ -99,6 +99,19 @@ describe('renderer', () => {
   });
 
 
+  it('supports per-region module styling without changing finder markup', () => {
+    const result = renderQR('https://example.com/region-styles-with-a-longer-payload-for-alignment', {
+      ...DEFAULT_STYLE,
+      regionStyles: {
+        data: { color: null, shape: null },
+        timing: { color: '#1d4ed8', shape: 'square' },
+        alignment: { color: '#7c3aed', shape: 'rounded' },
+      },
+    });
+    expect(result.svg).toContain('#1d4ed8');
+    expect(result.svg).toContain('data-role="finders"');
+  });
+
   it('expands the center cutout when logo padding increases', () => {
     const logoData = pngDataUrl();
     const style = {

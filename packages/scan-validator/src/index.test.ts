@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_STYLE } from '@moduqr/renderer';
-import { contrastRatio, evaluateSafety } from './index';
+import { autoFixStyle, contrastRatio, evaluateSafety } from './index';
 
 describe('scan safety', () => {
   it('calculates WCAG-style contrast for hex colors', () => {
@@ -112,4 +112,42 @@ describe('scan safety', () => {
     });
     expect(report.issues.some((issue) => issue.code === 'FINDER_CONTRAST')).toBe(true);
   });
+
+  it('Auto Fix removes deterministic styling risks and improves the score', () => {
+    const risky = {
+      ...DEFAULT_STYLE,
+      foreground: '#777777',
+      background: '#888888',
+      moduleShape: 'fluid' as const,
+      moduleGap: 0.25,
+      regionStyles: {
+        data: { color: '#777777', shape: 'fluid' as const },
+        timing: { color: '#777777', shape: 'circle' as const },
+        alignment: { color: '#777777', shape: 'diamond' as const },
+      },
+    };
+    const before = evaluateSafety({ payload: 'https://example.com/auto-fix', style: risky, outputWidth: 640, decoded: false });
+    const fixed = autoFixStyle(risky, before);
+    const after = evaluateSafety({ payload: 'https://example.com/auto-fix', style: fixed, outputWidth: 640, decoded: true });
+    expect(after.score).toBeGreaterThan(before.score);
+    expect(fixed.gradient).toBeNull();
+    expect(fixed.regionStyles.timing.shape).toBeNull();
+    expect(fixed.moduleGap).toBeLessThanOrEqual(0.08);
+  });
+
+  it('penalizes failed Phase 2 stress simulations', () => {
+    const report = evaluateSafety({
+      payload: 'https://example.com/simulations',
+      style: DEFAULT_STYLE,
+      outputWidth: 640,
+      decoded: true,
+      simulations: [
+        { kind: 'baseline', label: 'Baseline', decoded: true },
+        { kind: 'blur', label: 'Blur', decoded: false },
+        { kind: 'rotation', label: 'Rotation', decoded: false },
+      ],
+    });
+    expect(report.issues.some((issue) => issue.code === 'SIMULATION_FAILED')).toBe(true);
+  });
+
 });

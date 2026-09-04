@@ -78,10 +78,14 @@ export function PayloadEditor() {
   const smartInputRef = useRef<HTMLTextAreaElement>(null);
   const lastWritten = useRef(payload);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressFormWrites = useRef(false);
+  const suppressionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const writePayload = (type: PayloadType) => {
+    if (suppressFormWrites.current) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
+      timer.current = null;
       try {
         const v = getValues();
         const next = serializeFormValues(type, v);
@@ -96,6 +100,8 @@ export function PayloadEditor() {
 
   const changeType = (nextType: PayloadType) => {
     if (timer.current) clearTimeout(timer.current);
+    if (suppressionTimer.current) clearTimeout(suppressionTimer.current);
+    suppressFormWrites.current = true;
     reset(defaults);
     try {
       const next = serializeFormValues(nextType, defaults);
@@ -105,19 +111,26 @@ export function PayloadEditor() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not switch content type.');
     }
+    suppressionTimer.current = setTimeout(() => { suppressFormWrites.current = false; }, 0);
   };
 
   const applyStructured = useCallback((value: string, preserveRawPayload = false) => {
     if (!value.trim()) return;
     try {
+      if (timer.current) clearTimeout(timer.current);
+      if (suppressionTimer.current) clearTimeout(suppressionTimer.current);
+      suppressFormWrites.current = true;
       const parsed = parseStructuredPayload(value);
       const nextValues = { ...defaults, ...valuesForStructured(parsed.fields) };
       reset(nextValues);
       const nextPayload = preserveRawPayload ? value.trim() : serializeFormValues(parsed.type, nextValues as FormValues);
       lastWritten.current = nextPayload;
       setContent(parsed.type, nextPayload);
-      setMessage(`${detectPayloadType(value).reason} detected.`);
+      const detection = detectPayloadType(value);
+      setMessage(`${detection.reason} detected.`);
+      suppressionTimer.current = setTimeout(() => { suppressFormWrites.current = false; }, 0);
     } catch (error) {
+      suppressFormWrites.current = false;
       setMessage(error instanceof Error ? error.message : 'Could not parse this input.');
     }
   }, [reset, setContent]);
@@ -157,7 +170,10 @@ export function PayloadEditor() {
     };
   }, [applyStructured, payload, reset]);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (suppressionTimer.current) clearTimeout(suppressionTimer.current);
+  }, []);
 
 
   return <div>

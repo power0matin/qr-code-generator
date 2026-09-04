@@ -42,7 +42,7 @@ test('Phase 1 payload types produce decodable previews', async ({ page }) => {
 });
 
 test('smart input canonicalizes a detected email into an email QR payload', async ({ page }, testInfo) => {
-  const file = path.join(testInfo.outputDir, 'smart-email.png');
+  const file = path.join(testInfo.outputDir, 'smart-email-export.png');
   await page.goto('/generator');
 
   const initialQr = await qrMarkup(page);
@@ -106,11 +106,12 @@ test('scan redesign does not put payload in the URL', async ({ page }, testInfo)
 
 
 test('all shipped presets remain decodable for the baseline payload', async ({ page }) => {
+  test.setTimeout(90_000);
   await page.goto('/generator');
   await page.getByRole('tab', { name: 'presets' }).click();
   const presets = page.locator('.preset-card');
   const count = await presets.count();
-  expect(count).toBeGreaterThanOrEqual(20);
+  expect(count).toBeGreaterThanOrEqual(50);
   for (let index = 0; index < count; index += 1) {
     await presets.nth(index).click();
     await expectDecodable(page);
@@ -247,7 +248,7 @@ test('saved WiFi project cards do not expose credentials', async ({ page }) => {
 
   await page.getByLabel('Project name').fill(projectName);
   await page.getByRole('button', { name: 'Save locally' }).click();
-  await expect(page.getByText('Saved locally on this device.')).toBeVisible();
+  await expect(page.getByText(/Saved locally · revision \d+\./)).toBeVisible();
 
   await page.goto('/projects');
   const card = page.locator('.project-card').filter({ hasText: projectName });
@@ -258,7 +259,7 @@ test('saved WiFi project cards do not expose credentials', async ({ page }) => {
 
   await card.getByRole('button', { name: 'Load' }).click();
   await expect(page).toHaveURL(/\/generator$/);
-  await expect(page.getByText('Local project loaded.')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Local project loaded · revision \d+\./)).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'WiFi', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByLabel('Network name (SSID)')).toHaveValue('Private Network');
   await expect(page.getByRole('combobox', { name: 'WiFi security', exact: true })).toHaveValue('WPA');
@@ -271,7 +272,7 @@ test('saving a loaded favorite project preserves its favorite state', async ({ p
   await page.goto('/generator');
   await page.getByLabel('Project name').fill(projectName);
   await page.getByRole('button', { name: 'Save locally' }).click();
-  await expect(page.getByText('Saved locally on this device.')).toBeVisible();
+  await expect(page.getByText(/Saved locally · revision \d+\./)).toBeVisible();
 
   await page.goto('/projects');
   const firstCard = page.locator('.project-card').filter({ hasText: projectName });
@@ -281,10 +282,10 @@ test('saving a loaded favorite project preserves its favorite state', async ({ p
   await firstCard.getByRole('button', { name: 'Load' }).click();
 
   await expect(page).toHaveURL(/\/generator$/);
-  await expect(page.getByText('Local project loaded.')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Local project loaded · revision \d+\./)).toBeVisible({ timeout: 10_000 });
   await expect(page.getByLabel('Project name')).toHaveValue(projectName);
   await page.getByRole('button', { name: 'Save locally' }).click();
-  await expect(page.getByText('Saved locally on this device.')).toBeVisible();
+  await expect(page.getByText(/Saved locally · revision \d+\./)).toBeVisible();
 
   await page.goto('/projects');
   const savedCard = page.locator('.project-card').filter({ hasText: projectName });

@@ -25,7 +25,7 @@ The second rule is privacy. Static payloads, WiFi credentials, logos, scanned im
 
 ## Designer
 
-The current static studio includes the complete Phase 1 foundation plus the first Phase 2 professional-designer primitives:
+The current static studio includes the Phase 1 foundation plus the Phase 2 professional-designer implementation candidate:
 
 - URL, text, email, phone, SMS, WhatsApp, WiFi, vCard, geolocation and iCalendar payloads
 - Smart input detection plus editable parsing for structured WiFi, vCard, calendar and messaging payloads
@@ -33,22 +33,24 @@ The current static studio includes the complete Phase 1 foundation plus the firs
 - square, rounded, extra-rounded, dot/circle, diamond, soft-square, pixel, Connected and Fluid module styles
 - neighbour-aware Connected/Fluid rendering
 - square, rounded and circular finder rendering with independent top-left, top-right and bottom-left overrides
-- solid colors, multi-stop linear/radial module gradients, independent background gradients, quiet-zone and error-correction controls
+- solid colors, multi-stop linear/radial module gradients, independent background gradients, per-region data/timing/alignment styling, quiet-zone and error-correction controls
 - PNG, JPEG, WebP and sanitized SVG logos with protected finder regions and center cutout
 - minimal, rounded, badge, label and sticker-style frames kept outside the QR square
-- 24 data-defined presets; the planned 50+ validated Phase 2 preset library is not claimed as shipped yet
-- live preview, Undo/Redo, Reset, Surprise Me, keyboard shortcuts and local project saving
-- versioned JSON design import/export with explicit v1 → v2 project migration
+- 60 data-defined presets with search, category filters and local favorites; every preset is covered by automated decode regression tests
+- live preview, advanced Undo/Redo, Reset, Surprise Me, keyboard shortcuts, project tags, duplicate/search and 40-revision local design history
+- versioned JSON design import/export with explicit v1/v2 → v3 project migration plus privacy-safe design-only share URLs
 - custom raster export from 256–8192 px plus 512/1024/2048/4096 presets
 - SVG, PNG, JPEG, WebP and PDF export through the same renderer
+- mockup preview, printer-aware sizing guidance, Scan Safety v2 stress simulations and deterministic scan-first Auto Fix
+- local CSV/TSV/JSON batch generation up to 500 rows with templates, Worker preparation, ZIP exports and PDF sheets
 
 ### Scan → Redesign
 
-The local scanner accepts uploaded, dropped or pasted raster images. It detects the decoded content type, previews normalized HTTP(S) URLs before navigation, and can send the payload into the Designer using same-tab `sessionStorage` instead of putting sensitive content into the URL.
+The local scanner accepts live camera input plus uploaded, dropped or pasted raster images. It detects the decoded content type, previews normalized HTTP(S) URLs before navigation, and can send the payload into the Designer using same-tab `sessionStorage` instead of putting sensitive content into the URL.
 
 ## Scan safety
 
-The current score is deterministic and explainable. It evaluates contrast, weakest gradient-stop contrast, inherited and customized finder contrast, quiet zone, QR density/version, output module size, logo pressure, higher-risk geometry, encoding failure and — most importantly — whether the final browser-rasterized SVG can actually be decoded.
+Scan Safety v2 is deterministic and explainable. It evaluates contrast, weakest gradient-stop contrast, finder and per-region contrast, quiet zone, QR density/version, output module size, logo pressure, higher-risk geometry, encoding failure and — most importantly — whether the final browser-rasterized SVG can actually be decoded. Optional local degradation tests exercise blur, down/up-scaling, rotation and reduced contrast; Auto Fix applies conservative styling changes and is regression-tested to improve deliberately risky designs.
 
 Every export performs a decode preflight. Raster exports are checked again after image compression before the download is allowed. The score is a risk signal, not a guarantee for every printer, surface, camera or lighting condition.
 
@@ -56,7 +58,7 @@ See [Scan Safety](docs/SCAN_SAFETY.md).
 
 ## Local projects
 
-Projects are stored in IndexedDB and carry an explicit document schema version. The Projects view supports search, sorting, favorites, rename, duplicate, delete and reopen. Transactions are treated as complete only after IndexedDB commits them. JSON export is the portable backup format.
+Projects are stored in IndexedDB and carry an explicit document schema version. The Projects view supports search across names/tags/content, sorting, tags, favorites, rename, duplicate, delete and reopen. Saved edits retain the latest 40 local revisions for explicit restore-as-working-copy history. Transactions are treated as complete only after IndexedDB commits them. JSON export is the portable backup format.
 
 ## Privacy & security
 
@@ -120,13 +122,13 @@ Set `NEXT_PUBLIC_SITE_URL` to the public HTTPS origin before a production deploy
 
 ## Testing
 
-Vitest covers payloads, project migration/import boundaries, renderer behavior, presets and safety scoring. Playwright covers decode round trips, export preflight, PWA behavior, accessibility smoke tests, project persistence, over-capacity payload handling and horizontal-overflow checks at 320, 375, 390, 430, 768, 1024, 1280, 1440 and 1920 CSS pixels.
+Vitest covers payloads, v1/v2→v3 project migration/import boundaries, renderer behavior, 60 presets, batch parsing/limits, ZIP generation, design-only sharing, print planning and safety scoring. Playwright covers decode round trips, Phase 2 preset scans, safety simulations/Auto Fix, camera permission handling, batch Worker preparation, export preflight, PWA behavior, accessibility smoke tests, project persistence/history/tags, over-capacity payload handling, RTL/touch behavior and horizontal-overflow checks at 320, 375, 390, 430, 768, 1024, 1280, 1440 and 1920 CSS pixels.
 
 A new visual style is not releaseable merely because it looks good: it must survive automated decode regression coverage.
 
 ## SEO
 
-Useful landing pages exist for static features that actually ship. Batch and Dynamic routes remain accessible as roadmap documentation but are `noindex` and omitted from the sitemap until those features ship. Metadata includes canonical URLs, sitemap, robots, raster OpenGraph/Twitter artwork and structured SoftwareApplication/FAQ data.
+Useful landing pages exist for static features that actually ship. Batch is a shipped Phase 2 static feature and is indexed; the Dynamic route remains roadmap documentation, is `noindex`, and stays out of the sitemap until Phase 3 server mode ships. Metadata includes canonical URLs, sitemap, robots, raster OpenGraph/Twitter artwork and structured SoftwareApplication/FAQ data.
 
 ## Roadmap and versioning
 

@@ -20,6 +20,7 @@ const paths = [
   '/qr-code-with-logo',
   '/qr-code-designer',
   '/qr-code-scanner',
+  '/batch-qr-code-generator',
 ] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {

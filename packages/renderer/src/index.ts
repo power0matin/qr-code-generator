@@ -7,6 +7,7 @@ import type {
   FrameStyle,
   GradientDefinition,
   ModuleShape,
+  QRRegion,
   QRStyle,
   RenderedQR,
 } from '@moduqr/shared';
@@ -72,6 +73,11 @@ export const DEFAULT_STYLE: QRStyle = {
     topLeft: EMPTY_FINDER_OVERRIDE,
     topRight: EMPTY_FINDER_OVERRIDE,
     bottomLeft: EMPTY_FINDER_OVERRIDE,
+  },
+  regionStyles: {
+    data: { color: null, shape: null },
+    timing: { color: null, shape: null },
+    alignment: { color: null, shape: null },
   },
   foreground: '#111827',
   background: '#ffffff',
@@ -169,6 +175,46 @@ function safeLogoHref(value: unknown, mimeType: unknown): string | null {
 function isFinderCell(x: number, y: number, n: number): boolean {
   const inBox = (left: number, top: number): boolean => x >= left && x < left + 7 && y >= top && y < top + 7;
   return inBox(0, 0) || inBox(n - 7, 0) || inBox(0, n - 7);
+}
+
+
+function alignmentCenters(version: number, size: number): readonly number[] {
+  if (version <= 1) return [];
+  const count = Math.floor(version / 7) + 2;
+  const step = version === 32
+    ? 26
+    : Math.floor((version * 4 + count * 2 + 1) / (count * 2 - 2)) * 2;
+  const centers = new Array<number>(count);
+  centers[0] = 6;
+  for (let index = count - 1, position = size - 7; index >= 1; index -= 1, position -= step) centers[index] = position;
+  return centers;
+}
+
+function isAlignmentCell(x: number, y: number, version: number, size: number): boolean {
+  const centers = alignmentCenters(version, size);
+  for (const cx of centers) {
+    for (const cy of centers) {
+      const overlapsFinder = (cx === 6 && cy === 6) || (cx === 6 && cy === size - 7) || (cx === size - 7 && cy === 6);
+      if (overlapsFinder) continue;
+      if (Math.abs(x - cx) <= 2 && Math.abs(y - cy) <= 2) return true;
+    }
+  }
+  return false;
+}
+
+function moduleRegion(x: number, y: number, version: number, size: number): QRRegion {
+  if (isAlignmentCell(x, y, version, size)) return 'alignment';
+  if ((y === 6 && x >= 8 && x < size - 8) || (x === 6 && y >= 8 && y < size - 8)) return 'timing';
+  return 'data';
+}
+
+function resolvedRegionStyle(style: QRStyle, region: QRRegion): { readonly shape: ModuleShape; readonly fill: string | null } {
+  const fallback = { color: null, shape: null } as const;
+  const configured = style.regionStyles?.[region] ?? fallback;
+  return {
+    shape: configured.shape ? safeModuleShape(configured.shape) : safeModuleShape(style.moduleShape),
+    fill: configured.color ? esc(safeColor(configured.color, style.foreground)) : null,
+  };
 }
 
 function isLogoCutout(x: number, y: number, n: number, span: number, enabled: boolean): boolean {
@@ -336,11 +382,24 @@ function frameMarkup(style: QRStyle, qrWidth: number, qrHeight: number): { reado
   const textY = y + frameHeight / 2 + fontSize * 0.34;
   const background = esc(safeColor(style.background, '#ffffff'));
   const foreground = esc(safeColor(style.foreground, '#111827'));
-  const radius = frameStyle === 'rounded' || frameStyle === 'sticker' ? 24 : frameStyle === 'badge' ? 999 : 10;
-  const rect = `<rect data-role="frame" x="0" y="${y}" width="${qrWidth}" height="${frameHeight}" rx="${radius}" fill="${background}"/>`;
   const textValue = typeof style.frame.text === 'string' ? style.frame.text.slice(0, 80) : '';
   const text = `<text x="${qrWidth / 2}" y="${textY}" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="${fontSize}" font-weight="${fontWeight}" fill="${foreground}">${esc(textValue)}</text>`;
-  return { extraHeight: gap + frameHeight, markup: `${rect}${text}` };
+
+  if (frameStyle === 'minimal') {
+    return { extraHeight: gap + frameHeight, markup: `<line x1="${qrWidth * 0.18}" y1="${y + 8}" x2="${qrWidth * 0.82}" y2="${y + 8}" stroke="${foreground}" stroke-width="2" opacity=".22"/>${text}` };
+  }
+  if (frameStyle === 'badge') {
+    const width = Math.min(qrWidth * 0.76, Math.max(180, textValue.length * fontSize * 0.68 + padding * 2));
+    const x = (qrWidth - width) / 2;
+    return { extraHeight: gap + frameHeight, markup: `<rect data-role="frame" x="${x}" y="${y + 6}" width="${width}" height="${frameHeight - 12}" rx="${frameHeight}" fill="${foreground}"/><text x="${qrWidth / 2}" y="${textY}" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="${fontSize}" font-weight="${fontWeight}" fill="${background}">${esc(textValue)}</text>` };
+  }
+  if (frameStyle === 'label') {
+    return { extraHeight: gap + frameHeight, markup: `<rect data-role="frame" x="0" y="${y}" width="${qrWidth}" height="${frameHeight}" rx="8" fill="${background}" stroke="${foreground}" stroke-width="2"/>${text}` };
+  }
+  if (frameStyle === 'sticker') {
+    return { extraHeight: gap + frameHeight, markup: `<rect data-role="frame" x="4" y="${y + 4}" width="${qrWidth - 8}" height="${frameHeight - 8}" rx="24" fill="${background}" stroke="${foreground}" stroke-width="3" stroke-dasharray="8 6"/>${text}` };
+  }
+  return { extraHeight: gap + frameHeight, markup: `<rect data-role="frame" x="0" y="${y}" width="${qrWidth}" height="${frameHeight}" rx="24" fill="${background}"/>${text}` };
 }
 
 export function renderQR(payload: string, style: QRStyle = DEFAULT_STYLE, targetWidth = 640): RenderedQR {
@@ -357,7 +416,6 @@ export function renderQR(payload: string, style: QRStyle = DEFAULT_STYLE, target
   const logoPadding = finiteNumber(style.logo.padding, 4, 0, 20);
   const logoBorderWidth = finiteNumber(style.logo.borderWidth, 0, 0, 8);
   const moduleGap = finiteNumber(style.moduleGap, 0.08, 0, 0.35);
-  const moduleShape = safeModuleShape(style.moduleShape);
   const logoBox = logoSize + logoPadding * 2;
   const logoCutoutSpan = logoActive && logoCutout
     ? Math.min(matrix.size, Math.ceil((logoBox + logoBorderWidth) / modulePixels) + 2)
@@ -385,7 +443,9 @@ export function renderQR(payload: string, style: QRStyle = DEFAULT_STYLE, target
         bottom: isRenderableDark(x, y + 1),
         left: isRenderableDark(x - 1, y),
       };
-      modules.push(moduleElement(moduleShape, quiet + x * modulePixels, quiet + y * modulePixels, modulePixels, moduleGap, modulesPaint.fill, neighbors));
+      const region = moduleRegion(x, y, matrix.version, matrix.size);
+      const regionStyle = resolvedRegionStyle(style, region);
+      modules.push(moduleElement(regionStyle.shape, quiet + x * modulePixels, quiet + y * modulePixels, modulePixels, moduleGap, regionStyle.fill ?? modulesPaint.fill, neighbors));
     }
   }
 

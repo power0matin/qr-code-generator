@@ -9,11 +9,13 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Ten static payload types with Smart Detect parsing and editable structured inputs.
 - ModuQR-owned SVG renderer with square, rounded, dot/circle, diamond, pixel, Connected, and Fluid module styles.
 - Independent finder overrides and multi-stop module/background gradients.
-- Sanitized PNG/JPEG/WebP/SVG logo support, center cutout, frames, and 24 data-defined presets.
-- Deterministic Scan Safety scoring plus real browser-rasterized decode verification.
+- Sanitized PNG/JPEG/WebP/SVG logo support, center cutout, advanced frames, per-region styling, and 60 searchable/favoritable data-defined presets.
+- Scan Safety v2 with deterministic scoring, browser-rasterized decode verification, blur/scale/rotation/contrast simulations and scan-first Auto Fix.
 - SVG, PNG, JPEG, WebP, and PDF export with preflight and post-compression decode checks where applicable.
-- Local image scanner, privacy-safe Scan → Redesign, IndexedDB projects, versioned JSON portability, PWA/offline behavior, SEO pages, accessibility checks, CI, CodeQL, and release gates.
-- Design schema v2 with transparent migration from schema v1.
+- Local camera/upload/drop/paste scanner, privacy-safe Scan → Redesign, IndexedDB project tags/revision history, design-only share URLs, versioned JSON portability, PWA/offline behavior, SEO pages, accessibility checks, CI, CodeQL, and release gates.
+- Design schema v3 with transparent migration from schema v1 and v2.
+- Local batch generator for up to 500 CSV/TSV/JSON rows with template variables, Worker preparation, verified SVG/PNG ZIP export and PDF sheets.
+- Mockup Preview, Print Safety Assistant, print-size/module calculator, scan-distance planning heuristic and local small-file QR capacity analysis.
 
 ### Changed
 - Added neighbour-aware Connected/Fluid rendering and richer Phase 2 finder/gradient controls.
@@ -22,7 +24,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Local Playwright uses the system Chrome channel; CI retains the full managed Chromium/Firefox/WebKit matrix, and local QA can explicitly exercise the built production server without downloading managed browsers.
 - Local project reopening now passes only an IndexedDB project ID between routes instead of duplicating the whole design in session storage.
 - Production PWA registration warms the currently loaded Next.js static assets for stronger first-session offline behavior.
-- Batch and Dynamic roadmap pages remain accessible but are `noindex` and omitted from the sitemap until they ship.
+- Batch is now a real indexed static tool; Dynamic remains a `noindex` Phase 3 roadmap route.
 - Design tabs now use a keyboard-friendly roving tab stop with Arrow/Home/End navigation, and advanced range controls match the renderer/import schema limits.
 
 ### Fixed
@@ -53,7 +55,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Release and CI installs use the committed lockfile with `--frozen-lockfile`; release verification also runs the production dependency audit, and CI uses bounded job timeouts with stale-run cancellation.
 
 ### Tests
-- Added regressions for schema migration/import safety, payload edge cases, QR capacity failure, favorite persistence, logo MIME/SVG hardening, logo-padding cutout behavior, resolution-invariant obstruction scoring, frame/quiet-zone separation, finder/gradient contrast, runtime renderer hardening, PWA behavior, roadmap `noindex`, keyboard tab navigation, and responsive overflow.
+- Added regressions for v1/v2→v3 migration/import safety, payload edge cases, QR capacity failure, favorite/history persistence, logo MIME/SVG hardening, region/frame rendering, design-share privacy, batch parsing/limits, print planning, Auto Fix, resolution-invariant obstruction scoring, finder/gradient contrast, runtime renderer hardening, PWA behavior, dynamic-roadmap `noindex`, keyboard tab navigation, RTL and responsive overflow.
 - Browser QA covers renderer→scanner round trips, all shipped presets, advanced styles, exports, accessibility, and mobile/desktop behavior.
 
 > The first public release, `v0.1.0`, remains gated on a clean install from the committed lockfile and the complete lint, typecheck, unit, production-build, browser, accessibility, dependency-audit, and security acceptance matrix. Roadmap phase numbers do not determine SemVer major versions.

@@ -20,10 +20,10 @@ test('dynamic roadmap page is noindex and does not claim the feature is shipped'
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/i);
 });
 
-test('batch roadmap page is noindex', async ({ page }) => {
+test('batch generator is shipped and indexable', async ({ page }) => {
   await page.goto('/batch-qr-code-generator');
-  await expect(page.getByText('Roadmap status')).toBeVisible();
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/i);
+  await expect(page.getByRole('heading', { name: 'Batch QR Generator' })).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
 });
 
 
@@ -36,5 +36,5 @@ test('private workspace and roadmap-only routes stay out of the sitemap', async 
   const body = await sitemap.text();
   expect(body).not.toContain('/projects');
   expect(body).not.toContain('/dynamic-qr-code');
-  expect(body).not.toContain('/batch-qr-code-generator');
+  expect(body).toContain('/batch-qr-code-generator');
 });
