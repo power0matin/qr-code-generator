@@ -24,6 +24,7 @@ jobs:
       - name: Verify tag matches package version
         run: pnpm release:verify
       - run: pnpm check
+      - run: pnpm check:bundle
       - run: pnpm audit:prod
       - run: pnpm --filter @moduqr/web exec playwright install --with-deps chromium firefox webkit
       - run: pnpm --filter @moduqr/web test:e2e

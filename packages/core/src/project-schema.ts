@@ -4,6 +4,8 @@ import { decodeBase64DataUrl, inspectRasterDimensions, rasterDimensionsWithinLim
 
 const hexColor = z.string().regex(/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i, 'Use a 3- or 6-digit hex color.');
 const payloadTypeSchema = z.enum(['url', 'text', 'email', 'phone', 'sms', 'whatsapp', 'wifi', 'vcard', 'location', 'event']);
+const moduleShapeSchema = z.enum(['square', 'rounded', 'extra-rounded', 'dots', 'circle', 'diamond', 'soft-square', 'pixel', 'connected', 'fluid']);
+const v1ModuleShapeSchema = z.enum(['square', 'rounded', 'extra-rounded', 'dots', 'circle', 'diamond', 'soft-square', 'pixel']);
 const finderShapeSchema = z.enum(['square', 'rounded', 'circle']);
 const logoMimeSchema = z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
 
@@ -64,7 +66,8 @@ function logoDataMatchesMime(dataUrl: string, mimeType: z.infer<typeof logoMimeS
     'image/webp': /^data:image\/webp;base64,UklGR[A-Za-z0-9+/]*={0,2}$/,
   };
   const pattern = prefixes[mimeType];
-  return pattern ? pattern.test(dataUrl) && importedRasterIsSafe(dataUrl, mimeType) : false;
+  if (!pattern) return false;
+  return pattern.test(dataUrl) && importedRasterIsSafe(dataUrl, mimeType);
 }
 
 const logoSchema = z.object({
@@ -104,7 +107,7 @@ const baseDocumentSchema = {
 } as const;
 
 const v1StyleSchema = z.object({
-  moduleShape: z.enum(['square', 'rounded', 'extra-rounded', 'dots', 'circle', 'diamond', 'soft-square', 'pixel']),
+  moduleShape: v1ModuleShapeSchema,
   finderOuterShape: finderShapeSchema,
   finderInnerShape: finderShapeSchema,
   foreground: hexColor,
@@ -125,7 +128,7 @@ const finderOverrideSchema = z.object({
 });
 
 const v2StyleSchema = z.object({
-  moduleShape: z.enum(['square', 'rounded', 'extra-rounded', 'dots', 'circle', 'diamond', 'soft-square', 'pixel', 'connected', 'fluid']),
+  moduleShape: moduleShapeSchema,
   finderOuterShape: finderShapeSchema,
   finderInnerShape: finderShapeSchema,
   finderOverrides: z.object({
@@ -144,24 +147,46 @@ const v2StyleSchema = z.object({
   frame: frameSchema,
 });
 
-const v1DesignSchema = z.object({
-  version: z.literal(1),
-  ...baseDocumentSchema,
-  style: v1StyleSchema,
+const regionStyleSchema = z.object({
+  color: hexColor.nullable(),
+  shape: moduleShapeSchema.nullable(),
 });
 
-const v2DesignSchema = z.object({
+const v3StyleSchema = v2StyleSchema.extend({
+  regionStyles: z.object({
+    data: regionStyleSchema,
+    timing: regionStyleSchema,
+    alignment: regionStyleSchema,
+  }),
+});
+
+const v1DesignSchema = z.object({ version: z.literal(1), ...baseDocumentSchema, style: v1StyleSchema });
+const v2DesignSchema = z.object({ version: z.literal(2), ...baseDocumentSchema, style: v2StyleSchema });
+const v3DesignSchema = z.object({
   version: z.literal(DESIGN_SCHEMA_VERSION),
   ...baseDocumentSchema,
-  style: v2StyleSchema,
+  tags: z.array(z.string().trim().min(1).max(32)).max(12),
+  revision: z.number().int().gte(1).lte(1_000_000),
+  style: v3StyleSchema,
 });
 
-const emptyFinderOverride = {
-  outerShape: null,
-  innerShape: null,
-  outerColor: null,
-  innerColor: null,
-} as const;
+const emptyFinderOverride = { outerShape: null, innerShape: null, outerColor: null, innerColor: null } as const;
+const emptyRegionStyle = { color: null, shape: null } as const;
+const emptyRegionStyles = { data: emptyRegionStyle, timing: emptyRegionStyle, alignment: emptyRegionStyle } as const;
+
+function normalizeTags(tags: readonly string[]): readonly string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const tag of tags) {
+    const value = tag.trim().replace(/\s+/g, ' ').slice(0, 32);
+    const key = value.toLocaleLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(value);
+    if (normalized.length >= 12) break;
+  }
+  return normalized;
+}
 
 export function parseDesignDocument(value: unknown): QRDesignDocument {
   const version = typeof value === 'object' && value !== null && 'version' in value ? (value as { readonly version?: unknown }).version : undefined;
@@ -171,17 +196,28 @@ export function parseDesignDocument(value: unknown): QRDesignDocument {
     return {
       ...legacy,
       version: DESIGN_SCHEMA_VERSION,
+      tags: [],
+      revision: 1,
       style: {
         ...legacy.style,
-        finderOverrides: {
-          topLeft: emptyFinderOverride,
-          topRight: emptyFinderOverride,
-          bottomLeft: emptyFinderOverride,
-        },
+        finderOverrides: { topLeft: emptyFinderOverride, topRight: emptyFinderOverride, bottomLeft: emptyFinderOverride },
+        regionStyles: emptyRegionStyles,
         backgroundGradient: null,
       },
     };
   }
 
-  return v2DesignSchema.parse(value);
+  if (version === 2) {
+    const legacy = v2DesignSchema.parse(value);
+    return {
+      ...legacy,
+      version: DESIGN_SCHEMA_VERSION,
+      tags: [],
+      revision: 1,
+      style: { ...legacy.style, regionStyles: emptyRegionStyles },
+    };
+  }
+
+  const current = v3DesignSchema.parse(value);
+  return { ...current, tags: normalizeTags(current.tags) };
 }

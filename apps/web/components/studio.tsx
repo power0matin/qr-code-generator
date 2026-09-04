@@ -81,16 +81,23 @@ export function Studio() {
     }
 
     if (!projectId && !legacyStored) {
-      try {
-        const shared = readDesignShareFromHash(window.location.hash);
-        if (shared) {
-          setStyle(shared.style, shared.presetId);
-          setStatus('Shared design styling loaded. Payload content was not included in the link.');
+      let active = true;
+      const task = window.setTimeout(() => {
+        if (!active) return;
+        try {
+          const shared = readDesignShareFromHash(window.location.hash);
+          if (shared) {
+            setStyle(shared.style, shared.presetId);
+            setStatus('Shared design styling loaded. Payload content was not included in the link.');
+          }
+        } catch (error) {
+          setStatus(error instanceof Error ? `Shared design blocked: ${error.message}` : 'Shared design could not be loaded.');
         }
-      } catch (error) {
-        setStatus(error instanceof Error ? `Shared design blocked: ${error.message}` : 'Shared design could not be loaded.');
-      }
-      return;
+      }, 0);
+      return () => {
+        active = false;
+        window.clearTimeout(task);
+      };
     }
 
     let active = true;
@@ -379,9 +386,10 @@ function PrintAssistant(props: Readonly<{ dpi: number; setDpi: (dpi: number) => 
 }
 
 function MockupPreview(props: Readonly<{ mockup: Mockup; setMockup: (mockup: Mockup) => void; svg: string }>) {
+  const previewSvg = props.svg.replaceAll('moduqr-', 'moduqr-mockup-');
   return <section className="mockup-section" aria-labelledby="mockup-title">
     <div className="mockup-heading"><div><strong id="mockup-title">Mockup Preview</strong><span>Visual context only; export remains the original QR.</span></div><select className="select compact-select" aria-label="Mockup type" value={props.mockup} onChange={(event) => props.setMockup(event.target.value as Mockup)}><option value="card">Business card</option><option value="poster">Poster</option><option value="phone">Phone screen</option><option value="package">Package</option></select></div>
-    <div className={`mockup-stage mockup-${props.mockup}`}><div className="mockup-copy"><strong>ModuQR</strong><span>Scan to continue</span></div><div className="mockup-qr" dangerouslySetInnerHTML={{ __html: props.svg }}/></div>
+    <div className={`mockup-stage mockup-${props.mockup}`}><div className="mockup-copy"><strong>ModuQR</strong><span>Scan to continue</span></div><div className="mockup-qr" dangerouslySetInnerHTML={{ __html: previewSvg }}/></div>
   </section>;
 }
 
@@ -417,7 +425,7 @@ function ExportPanel(props: Readonly<{
     <button type="button" className="button accent" onClick={props.onExport} disabled={!props.canExport}><Download size={16}/> Verify & download</button>
     <button type="button" className="button" onClick={props.onSave}><Save size={16}/> Save locally</button>
     <div className="style-grid"><button type="button" className="button ghost" onClick={props.onShare}><Copy size={15}/> Design link</button><button type="button" className="button ghost" onClick={props.onExportJson}><FileDown size={15}/> JSON</button><button type="button" className="button ghost" onClick={props.onImport}><Upload size={15}/> Import</button></div>
-    {props.status ? <div className="help" aria-live="polite">{props.status}</div> : null}
+    {props.status ? <div className="help" role="status" aria-live="polite">{props.status}</div> : null}
   </div></section>;
 }
 

@@ -60,10 +60,35 @@ function currentStyle(documentValue: Record<string, unknown>): Record<string, un
 describe('design document migration and validation', () => {
   it('migrates schema v1 projects into the current schema without losing the design', () => {
     const migrated = parseDesignDocument(legacy);
-    expect(migrated.version).toBe(2);
+    expect(migrated.version).toBe(3);
     expect(migrated.style.moduleShape).toBe('rounded');
     expect(migrated.style.backgroundGradient).toBeNull();
     expect(migrated.style.finderOverrides.topLeft.outerColor).toBeNull();
+    expect(migrated.style.regionStyles.timing.shape).toBeNull();
+    expect(migrated.tags).toEqual([]);
+    expect(migrated.revision).toBe(1);
+  });
+
+
+  it('migrates schema v2 projects into v3 without changing Phase 2 renderer primitives', () => {
+    const v2 = currentDocument();
+    v2['version'] = 2;
+    delete v2['tags'];
+    delete v2['revision'];
+    const style = currentStyle(v2);
+    delete style['regionStyles'];
+    const migrated = parseDesignDocument(v2);
+    expect(migrated.version).toBe(3);
+    expect(migrated.style.moduleShape).toBe('rounded');
+    expect(migrated.style.regionStyles.data.color).toBeNull();
+    expect(migrated.tags).toEqual([]);
+    expect(migrated.revision).toBe(1);
+  });
+
+  it('normalizes duplicate project tags in v3 documents', () => {
+    const documentValue = currentDocument();
+    documentValue['tags'] = [' Campaign ', 'campaign', 'Print'];
+    expect(parseDesignDocument(documentValue).tags).toEqual(['Campaign', 'Print']);
   });
 
   it('rejects imported logo sizes larger than the renderer and editor support', () => {
