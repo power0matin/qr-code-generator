@@ -3,7 +3,7 @@
 import { detectPayloadType, parseStructuredPayload, serializePayload } from '@moduqr/core';
 import type { PayloadType } from '@moduqr/shared';
 import { WandSparkles } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useStudioStore } from '@/lib/studio-store';
 
@@ -35,7 +35,7 @@ interface FormValues {
 }
 
 const defaults: FormValues = {
-  url: 'https://example.com', text: 'Hello from ModuQR', email: 'hello@example.com', subject: '', body: '', phone: '+15550100', message: 'Hello', ssid: 'My WiFi', password: '', security: 'WPA', hidden: false,
+  url: 'https://example.com', text: 'Hello from ModuQR', email: 'hello@example.com', subject: '', body: '', phone: '+15550100', message: 'Hello', ssid: 'My WiFi', password: '', security: 'nopass', hidden: false,
   firstName: 'Alex', lastName: 'Morgan', organization: '', jobTitle: '', title: 'Event', website: '', latitude: 40.7128, longitude: -74.006, label: '', start: '2026-09-01T09:00', end: '2026-09-01T10:00', location: '', description: '',
 };
 
@@ -75,12 +75,17 @@ export function PayloadEditor() {
   const { register, getValues, reset, formState: { errors } } = useForm<FormValues>({ defaultValues: defaults, mode: 'onChange' });
   const [smart, setSmart] = useState('');
   const [message, setMessage] = useState('');
+  const smartInputRef = useRef<HTMLTextAreaElement>(null);
   const lastWritten = useRef(payload);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressFormWrites = useRef(false);
+  const suppressionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const writePayload = (type: PayloadType) => {
+    if (suppressFormWrites.current) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
+      timer.current = null;
       try {
         const v = getValues();
         const next = serializeFormValues(type, v);
@@ -95,6 +100,8 @@ export function PayloadEditor() {
 
   const changeType = (nextType: PayloadType) => {
     if (timer.current) clearTimeout(timer.current);
+    if (suppressionTimer.current) clearTimeout(suppressionTimer.current);
+    suppressFormWrites.current = true;
     reset(defaults);
     try {
       const next = serializeFormValues(nextType, defaults);
@@ -104,48 +111,77 @@ export function PayloadEditor() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not switch content type.');
     }
+    suppressionTimer.current = setTimeout(() => { suppressFormWrites.current = false; }, 0);
   };
 
-  const applyStructured = (value: string) => {
+  const applyStructured = useCallback((value: string, preserveRawPayload = false) => {
     if (!value.trim()) return;
     try {
+      if (timer.current) clearTimeout(timer.current);
+      if (suppressionTimer.current) clearTimeout(suppressionTimer.current);
+      suppressFormWrites.current = true;
       const parsed = parseStructuredPayload(value);
       const nextValues = { ...defaults, ...valuesForStructured(parsed.fields) };
       reset(nextValues);
-      lastWritten.current = value.trim();
-      setContent(parsed.type, value.trim());
-      setMessage(`${detectPayloadType(value).reason} detected.`);
+      const nextPayload = preserveRawPayload ? value.trim() : serializeFormValues(parsed.type, nextValues as FormValues);
+      lastWritten.current = nextPayload;
+      setContent(parsed.type, nextPayload);
+      const detection = detectPayloadType(value);
+      setMessage(`${detection.reason} detected.`);
+      suppressionTimer.current = setTimeout(() => { suppressFormWrites.current = false; }, 0);
     } catch (error) {
+      suppressFormWrites.current = false;
       setMessage(error instanceof Error ? error.message : 'Could not parse this input.');
     }
-  };
+  }, [reset, setContent]);
 
   useEffect(() => {
-    const redesign = sessionStorage.getItem('moduqr-redesign-payload');
-    if (redesign) {
-      sessionStorage.removeItem('moduqr-redesign-payload');
-      applyStructured(redesign);
-      return;
-    }
-    if (payload === lastWritten.current) return;
+    let redesign: string | null = null;
     try {
-      const parsed = parseStructuredPayload(payload);
-      reset({ ...defaults, ...valuesForStructured(parsed.fields) });
-      lastWritten.current = payload;
+      redesign = window.sessionStorage.getItem('moduqr-redesign-payload');
     } catch {
-      reset({ ...defaults, text: payload });
+      redesign = null;
     }
-  }, [payload, reset]);
+    if (!redesign && payload === lastWritten.current) return;
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (redesign) {
+        applyStructured(redesign, true);
+        try {
+          window.sessionStorage.removeItem('moduqr-redesign-payload');
+        } catch {
+          // The payload is already applied; storage cleanup is best-effort only.
+        }
+        return;
+      }
+      try {
+        const parsed = parseStructuredPayload(payload);
+        reset({ ...defaults, ...valuesForStructured(parsed.fields) });
+        lastWritten.current = payload;
+      } catch {
+        reset({ ...defaults, text: payload });
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [applyStructured, payload, reset]);
+
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (suppressionTimer.current) clearTimeout(suppressionTimer.current);
+  }, []);
 
 
   return <div>
     <div className="panel-header"><div><h2>Content</h2><p>Everything is encoded locally.</p></div></div>
     <div className="field">
       <label htmlFor="smart-input">Smart input</label>
-      <textarea id="smart-input" className="textarea" value={smart} onChange={(event) => setSmart(event.target.value)} placeholder="Paste a URL, WiFi payload, vCard, email…" />
-      <button type="button" className="button ghost" onClick={() => applyStructured(smart)}><WandSparkles size={15}/> Detect & use</button>
+      <textarea ref={smartInputRef} id="smart-input" className="textarea" value={smart} onChange={(event) => setSmart(event.target.value)} placeholder="Paste a URL, WiFi payload, vCard, email…" />
+      <button type="button" className="button ghost" onClick={() => applyStructured(smartInputRef.current?.value ?? smart)}><WandSparkles size={15}/> Detect & use</button>
       {message ? <div className={message.includes('detected') ? 'help' : 'error'} role="status">{message}</div> : null}
     </div>
     <div className="divider" />
@@ -158,7 +194,23 @@ export function PayloadEditor() {
       {payloadType === 'email' ? <><Field label="Email"><input className="input" type="email" {...register('email', { required: true })}/></Field><Field label="Subject"><input className="input" {...register('subject')}/></Field><Field label="Message"><textarea className="textarea" {...register('body')}/></Field></> : null}
       {payloadType === 'phone' ? <Field label="Phone number"><input className="input" inputMode="tel" {...register('phone', { required: true })}/></Field> : null}
       {payloadType === 'sms' || payloadType === 'whatsapp' ? <><Field label="Phone number"><input className="input" inputMode="tel" {...register('phone', { required: true })}/></Field><Field label="Message"><textarea className="textarea" {...register('message')}/></Field></> : null}
-      {payloadType === 'wifi' ? <><Field label="Network name (SSID)"><input className="input" {...register('ssid', { required: true })}/></Field><Field label="Security"><select className="select" {...register('security')}><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option><option value="nopass">No password</option></select></Field><Field label="Password"><input className="input" type="password" autoComplete="off" {...register('password')}/><span className="help">Never uploaded or added to a shareable URL.</span></Field><label className="field-label"><input type="checkbox" {...register('hidden')}/> Hidden network</label></> : null}
+      {payloadType === 'wifi' ? <>
+        <Field label="Network name (SSID)"><input className="input" {...register('ssid', { required: true })}/></Field>
+        <div className="field">
+          <label htmlFor="wifi-security">WiFi security</label>
+          <select id="wifi-security" className="select" {...register('security')}>
+            <option value="WPA">WPA/WPA2/WPA3</option>
+            <option value="WEP">WEP</option>
+            <option value="nopass">No password</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="wifi-password">WiFi password</label>
+          <input id="wifi-password" className="input" type="password" autoComplete="off" aria-describedby="wifi-password-help" {...register('password')}/>
+          <span id="wifi-password-help" className="help">Never uploaded or added to a shareable URL.</span>
+        </div>
+        <label className="field-label"><input type="checkbox" {...register('hidden')}/> Hidden network</label>
+      </> : null}
       {payloadType === 'vcard' ? <><Field label="First name"><input className="input" {...register('firstName')}/></Field><Field label="Last name"><input className="input" {...register('lastName')}/></Field><Field label="Organization"><input className="input" {...register('organization')}/></Field><Field label="Title"><input className="input" {...register('jobTitle')}/></Field><Field label="Phone"><input className="input" {...register('phone')}/></Field><Field label="Email"><input className="input" type="email" {...register('email')}/></Field><Field label="Website"><input className="input" {...register('website')}/></Field></> : null}
       {payloadType === 'location' ? <><Field label="Latitude"><input className="input" type="number" step="any" {...register('latitude', { valueAsNumber: true })}/></Field><Field label="Longitude"><input className="input" type="number" step="any" {...register('longitude', { valueAsNumber: true })}/></Field><Field label="Label"><input className="input" {...register('label')}/></Field></> : null}
       {payloadType === 'event' ? <><Field label="Event title"><input className="input" {...register('title', { required: true })}/></Field><Field label="Starts"><input className="input" type="datetime-local" {...register('start')}/></Field><Field label="Ends"><input className="input" type="datetime-local" {...register('end')}/></Field><Field label="Location"><input className="input" {...register('location')}/></Field><Field label="Description"><textarea className="textarea" {...register('description')}/></Field></> : null}
@@ -166,6 +218,6 @@ export function PayloadEditor() {
   </div>;
 }
 
-function Field({ label, error, children }: Readonly<{ label: string; error?: string; children: React.ReactNode }>) {
+function Field({ label, error, children }: Readonly<{ label: string; error?: string | undefined; children: React.ReactNode }>) {
   return <label className="field"><span className="field-label">{label}</span>{children}{error ? <span className="error">{error}</span> : null}</label>;
 }

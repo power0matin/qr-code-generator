@@ -1,26 +1,30 @@
 # Scan Safety model
 
-The Phase 1 score is a deterministic advisory signal. It is not a certification and must not be presented as a guarantee that every physical print will scan.
+The current score is a deterministic advisory signal. It is not a certification and must not be presented as a guarantee that every physical print will scan.
 
 ## Inputs
 
 The evaluator currently considers:
 
 - foreground/background luminance contrast
-- weakest gradient-stop contrast
+- weakest module/background gradient-stop contrast across multi-stop gradients
+- all resolved finder outer/pupil colors, including inherited foreground colors, against solid or gradient backgrounds
 - quiet-zone width in modules
 - encoded QR version/density
 - module size at the requested output width
-- logo footprint and selected ECC
+- logo footprint, cutout behavior and selected ECC
 - geometry known to remove more standard module/finder area
+- inability to encode an over-capacity payload
 - result of decoding the final browser-rasterized renderer output
 
-A failed final decode has the largest single penalty.
+An encoding failure returns a controlled `ENCODE_FAILED` issue with a zero score. A failed final rendered decode carries the largest normal scanability penalty.
 
 ## Export gate
 
 Preview and export use the same SVG renderer. Before a download, ModuQR rasterizes that SVG and decodes it. PNG/JPEG/WebP are decoded again after compression. If validation fails, export is blocked rather than silently delivering an unreadable QR.
 
+The renderer also keeps Finder patterns solid when module gradients are enabled and places visual frames after the complete QR square so CTA artwork does not intrude into the quiet zone.
+
 ## Limits
 
-Phase 1 does not yet simulate printer dot gain, perspective distortion, blur, rotation, low-light camera noise, paper reflectivity or real viewing distance. Those multi-condition checks belong to Safety v2 in Phase 2.
+The Phase 2 foundation understands advanced module/background gradients, neighbour-aware modules and independent finder colors. The local Safety v2 simulations currently exercise baseline rendering, blur, scale changes, rotation and reduced contrast. These deterministic checks are advisory: they do not simulate every printer, camera, paper surface, lighting condition or real viewing distance, and they are not a guarantee of physical scanability.

@@ -1,4 +1,4 @@
-export const DESIGN_SCHEMA_VERSION = 1 as const;
+export const DESIGN_SCHEMA_VERSION = 3 as const;
 
 export type ErrorCorrectionLevel = 'L' | 'M' | 'Q' | 'H';
 export type ModuleShape =
@@ -9,10 +9,14 @@ export type ModuleShape =
   | 'circle'
   | 'diamond'
   | 'soft-square'
-  | 'pixel';
+  | 'pixel'
+  | 'connected'
+  | 'fluid';
 export type FinderShape = 'square' | 'rounded' | 'circle';
+export type FinderPosition = 'topLeft' | 'topRight' | 'bottomLeft';
 export type FrameStyle = 'none' | 'minimal' | 'rounded' | 'badge' | 'label' | 'sticker';
 export type GradientType = 'linear' | 'radial';
+export type QRRegion = 'data' | 'timing' | 'alignment';
 export type PayloadType =
   | 'url'
   | 'text'
@@ -34,6 +38,30 @@ export interface GradientDefinition {
   readonly type: GradientType;
   readonly angle: number;
   readonly stops: readonly GradientStop[];
+}
+
+export interface FinderOverride {
+  readonly outerShape: FinderShape | null;
+  readonly innerShape: FinderShape | null;
+  readonly outerColor: string | null;
+  readonly innerColor: string | null;
+}
+
+export interface FinderOverrides {
+  readonly topLeft: FinderOverride;
+  readonly topRight: FinderOverride;
+  readonly bottomLeft: FinderOverride;
+}
+
+export interface RegionStyle {
+  readonly color: string | null;
+  readonly shape: ModuleShape | null;
+}
+
+export interface RegionStyles {
+  readonly data: RegionStyle;
+  readonly timing: RegionStyle;
+  readonly alignment: RegionStyle;
 }
 
 export interface LogoSettings {
@@ -60,9 +88,12 @@ export interface QRStyle {
   readonly moduleShape: ModuleShape;
   readonly finderOuterShape: FinderShape;
   readonly finderInnerShape: FinderShape;
+  readonly finderOverrides: FinderOverrides;
+  readonly regionStyles: RegionStyles;
   readonly foreground: string;
   readonly background: string;
   readonly gradient: GradientDefinition | null;
+  readonly backgroundGradient: GradientDefinition | null;
   readonly quietZone: number;
   readonly moduleGap: number;
   readonly errorCorrection: ErrorCorrectionLevel;
@@ -79,8 +110,17 @@ export interface QRDesignDocument {
   readonly style: QRStyle;
   readonly presetId: string | null;
   readonly favorite: boolean;
+  readonly tags: readonly string[];
+  readonly revision: number;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface ProjectRevision {
+  readonly projectId: string;
+  readonly revision: number;
+  readonly savedAt: string;
+  readonly document: QRDesignDocument;
 }
 
 export interface RenderedQR {
@@ -91,6 +131,14 @@ export interface RenderedQR {
   readonly modulePixels: number;
 }
 
+export type SafetySimulationKind = 'baseline' | 'blur' | 'scale' | 'rotation' | 'contrast';
+
+export interface SafetySimulationResult {
+  readonly kind: SafetySimulationKind;
+  readonly label: string;
+  readonly decoded: boolean;
+}
+
 export interface SafetyIssue {
   readonly code:
     | 'LOW_CONTRAST'
@@ -99,8 +147,12 @@ export interface SafetyIssue {
     | 'SMALL_MODULES'
     | 'LOGO_OBSTRUCTION'
     | 'GRADIENT_CONTRAST'
+    | 'FINDER_CONTRAST'
+    | 'REGION_CONTRAST'
     | 'SHAPE_RISK'
-    | 'DECODE_FAILED';
+    | 'SIMULATION_FAILED'
+    | 'DECODE_FAILED'
+    | 'ENCODE_FAILED';
   readonly severity: 'info' | 'warning' | 'error';
   readonly message: string;
   readonly fix: string;
