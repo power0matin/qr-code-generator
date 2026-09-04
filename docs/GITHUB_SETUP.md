@@ -145,15 +145,15 @@ Roadmap phases are not mapped to major versions. The repository follows Semantic
 - Public previews may use prerelease identifiers such as `0.3.0-alpha.1`, `0.3.0-beta.1`, and `0.3.0-rc.1`.
 - `1.0.0` is reserved for a genuinely stable product with documented public APIs/schemas and compatibility expectations; it is not tied to Phase 1, 2, or 3.
 
-Before creating any tag, update the root package version and changelog. The release workflow verifies that the Git tag exactly matches the root package version.
+Before creating any tag, update the root package version and changelog. The release workflow verifies that the Git tag exactly matches the root package version and that every workspace package uses the same version.
 
 Do not create a release tag until the capabilities claimed by that release are implemented, documented and verified. See `docs/VERSIONING.md`.
 
 ## Social preview
 
-Use a 1280×640 social preview based on the ModuQR visual identity. Keep the QR itself central and avoid claiming unshipped Phase 2/3 features in the artwork.
+Use a 1200×630 social preview based on the ModuQR visual identity. Keep the QR itself central and avoid claiming unshipped Phase 2/3 features in the artwork.
 
-The application Open Graph asset currently lives under `apps/web/public/og.svg`; a repository-specific raster social preview can be generated when the final public branding is approved.
+The application Open Graph asset is the raster file `apps/web/public/og.png`. GitHub repository social preview can reuse or adapt that artwork without claiming unshipped capabilities.
 
 ## About section checklist
 

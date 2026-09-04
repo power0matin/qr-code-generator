@@ -39,9 +39,9 @@ For every release:
 1. Finish and document the intended scope.
 2. Run the complete release gate from a clean checkout.
 3. Update `CHANGELOG.md`.
-4. Set the root/package versions to the exact release version.
+4. Set the root and every workspace package version to the exact release version.
 5. Commit the release metadata.
 6. Create an annotated or signed Git tag named `v<version>`.
-7. Push the tag; GitHub Actions verifies that the tag matches the root package version before creating the GitHub Release.
+7. Push the tag; GitHub Actions verifies that the tag matches the root version and that every workspace package uses that same version before creating the GitHub Release.
 
 Never create a tag merely because a roadmap phase number changed.

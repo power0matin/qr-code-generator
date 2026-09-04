@@ -5,23 +5,57 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 ## [Unreleased]
 
 ### Added
-- pnpm monorepo with `apps/web` and separated core/renderer/preset/scan-validation/shared packages.
-- Ten Phase 1 static payload types and Smart Detect parsing.
-- Custom SVG rendering, 24 presets, logos, gradients, finder styles and initial frames.
-- Deterministic Scan Safety v1 plus real rendered decode verification.
-- SVG/PNG/JPEG/WebP/PDF export with preflight and post-compression checks where applicable.
-- Local image scanner, safe URL preview and privacy-safe Scan → Redesign.
-- IndexedDB projects with search, favorite, duplicate, rename, delete and versioned JSON portability.
-- Light/dark/system themes, PWA/offline infrastructure, SEO landing pages and security headers.
-- Vitest/Playwright/axe test definitions, responsive matrix, CI, CodeQL, Dependabot and release gates.
+- pnpm monorepo with separated web, core, renderer, preset, scan-validation, and shared packages.
+- Ten static payload types with Smart Detect parsing and editable structured inputs.
+- ModuQR-owned SVG renderer with square, rounded, dot/circle, diamond, pixel, Connected, and Fluid module styles.
+- Independent finder overrides and multi-stop module/background gradients.
+- Sanitized PNG/JPEG/WebP/SVG logo support, center cutout, advanced frames, per-region styling, and 60 searchable/favoritable data-defined presets.
+- Scan Safety v2 with deterministic scoring, browser-rasterized decode verification, blur/scale/rotation/contrast simulations and scan-first Auto Fix.
+- SVG, PNG, JPEG, WebP, and PDF export with preflight and post-compression decode checks where applicable.
+- Local camera/upload/drop/paste scanner, privacy-safe Scan → Redesign, IndexedDB project tags/revision history, design-only share URLs, versioned JSON portability, PWA/offline behavior, SEO pages, accessibility checks, CI, CodeQL, and release gates.
+- Design schema v3 with transparent migration from schema v1 and v2.
+- Local batch generator for up to 500 CSV/TSV/JSON rows with template variables, Worker preparation, verified SVG/PNG ZIP export and PDF sheets.
+- Mockup Preview, Print Safety Assistant, print-size/module calculator, scan-distance planning heuristic and local small-file QR capacity analysis.
 
-### Fixed during audit
-- Structured Smart Detect now populates editable WiFi/vCard/calendar fields.
-- iCalendar compact dates convert into editable `datetime-local` values.
-- WhatsApp API links recover the actual phone parameter.
-- URL mode rejects non-HTTP(S) schemes.
-- QR encoder border handling is compatible with `qr@0.6.0` while preserving renderer-owned quiet zones.
-- Transparent and framed raster exports preserve the SVG aspect ratio and verification behavior.
-- Scan → Redesign keeps decoded content out of the query string.
+### Changed
+- Added neighbour-aware Connected/Fluid rendering and richer Phase 2 finder/gradient controls.
+- Kept finder patterns solid under module gradients to preserve locator reliability.
+- Refined the home hero preview to use the real renderer without hard-coded preset or numeric safety claims.
+- Local Playwright uses the system Chrome channel; CI retains the full managed Chromium/Firefox/WebKit matrix, and local QA can explicitly exercise the built production server without downloading managed browsers.
+- Local project reopening now passes only an IndexedDB project ID between routes instead of duplicating the whole design in session storage.
+- Production PWA registration warms the currently loaded Next.js static assets for stronger first-session offline behavior.
+- Batch is now a real indexed static tool; Dynamic remains a `noindex` Phase 3 roadmap route.
+- Design tabs now use a keyboard-friendly roving tab stop with Arrow/Home/End navigation, and advanced range controls match the renderer/import schema limits.
 
-> The first public release, `v0.1.0`, remains gated on a clean dependency install and the complete CI/browser acceptance matrix. Roadmap phase numbers do not determine SemVer major versions.
+### Fixed
+- Replaced the removed Lucide GitHub brand export with a dependency-independent accessible repository icon.
+- Added real web-package unit coverage for public URL/repository normalization so the workspace test command no longer fails on an empty Vitest suite.
+- Moved the web Vitest config to native ESM (`vitest.config.mjs`) to avoid the CommonJS/ESM config-loader warning.
+- Made project and Scan → Redesign session handoffs resilient to React development remounts by consuming session storage only after the handoff is successfully applied.
+- Added explicit accessible names to scanner/render error regions and to WiFi security/password controls so browser tests and assistive technology can target the intended controls without colliding with Next.js route announcers, option text, or helper copy.
+- Prevented over-capacity payloads from crashing the Studio and blocked export when encoding fails.
+- Preserved favorites across project load/edit/save and resolved IndexedDB writes only after transaction commit.
+- Prevented stale scanner operations from overwriting newer results, validated raster dimensions before browser image decoding, and stripped URL credentials from explicit external-open targets.
+- Hardened phone, WiFi, vCard, geolocation, WhatsApp, and iCalendar parsing/serialization edge cases.
+- Kept visual frames fully outside the QR square and quiet zone.
+- Expanded logo cutout geometry to account for the complete logo box, including padding and border footprint.
+- Expanded Safety checks to include inherited/custom finder contrast and full logo-footprint risk without incorrectly treating raster export resolution as reduced obstruction.
+- Fixed strict TypeScript, React Hooks, accessibility, color-contrast, local Playwright, and Windows Corepack issues found during QA.
+- Guarded same-tab project/redesign handoff when session storage is unavailable instead of allowing storage exceptions to break the UI.
+- Made development service-worker cleanup one-time per tab so stale caches are removed without breaking local offline tests after reload.
+- Enabled HSTS and `upgrade-insecure-requests` only for a configured HTTPS public origin, preserving local production/CI testing over HTTP.
+- Normalized public metadata origins and repository links and removed obsolete OpenGraph SVG artwork.
+
+### Security
+- Centralized raster signature/dimension inspection across design imports, logo uploads, scanner inputs, and renderer runtime defenses.
+- Validated uploaded raster signatures and sanitized SVGs through an explicit tag/attribute allowlist.
+- Revalidated imported design JSON, colors, logo MIME/data pairs, raster dimensions, and SVG references before loading.
+- Added renderer-level defense in depth for unsafe runtime paint/logo values and oversized raster-logo dimensions.
+- Tightened production CSP, Referrer-Policy, `nosniff`, frame protection, Permissions-Policy, COOP, and CORP; HTTPS-only headers are conditional on an HTTPS public origin.
+- Release and CI installs use the committed lockfile with `--frozen-lockfile`; release verification also runs the production dependency audit, and CI uses bounded job timeouts with stale-run cancellation.
+
+### Tests
+- Added regressions for v1/v2→v3 migration/import safety, payload edge cases, QR capacity failure, favorite/history persistence, logo MIME/SVG hardening, region/frame rendering, design-share privacy, batch parsing/limits, print planning, Auto Fix, resolution-invariant obstruction scoring, finder/gradient contrast, runtime renderer hardening, PWA behavior, dynamic-roadmap `noindex`, keyboard tab navigation, RTL and responsive overflow.
+- Browser QA covers renderer→scanner round trips, all shipped presets, advanced styles, exports, accessibility, and mobile/desktop behavior.
+
+> The first public release, `v0.1.0`, remains gated on a clean install from the committed lockfile and the complete lint, typecheck, unit, production-build, browser, accessibility, dependency-audit, and security acceptance matrix. Roadmap phase numbers do not determine SemVer major versions.
