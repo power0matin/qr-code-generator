@@ -20,5 +20,11 @@
     "release:verify": "node scripts/verify-release-tag.mjs",
     "check:bundle": "node scripts/check-bundle-size.mjs"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "pnpm": {
+    "overrides": {
+      "sharp": "0.35.5",
+      "source-map-js": "1.2.2"
+    }
+  }
 }
