@@ -23,6 +23,7 @@
   "license": "MIT",
   "pnpm": {
     "overrides": {
+      "dompurify": "3.4.17",
       "sharp": "0.35.5",
       "source-map-js": "1.2.2"
     }
