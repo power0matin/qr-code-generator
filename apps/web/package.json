@@ -19,7 +19,7 @@
     "@moduqr/scan-validator": "workspace:*",
     "@moduqr/shared": "workspace:*",
     "jspdf": "4.2.1",
-    "lucide-react": "1.61.0",
+    "lucide-react": "1.66.0",
     "next": "16.4.3",
     "qr": "0.7.2",
     "react": "19.3.1",
