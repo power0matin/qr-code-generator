@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import path from 'node:path';
+import { readStoredProjects } from './project-storage';
 
 const widths = [320, 375, 390, 430, 768, 1024, 1280, 1440, 1920] as const;
 
@@ -249,6 +250,12 @@ test('saved WiFi project cards do not expose credentials', async ({ page }) => {
   await page.getByLabel('Project name').fill(projectName);
   await page.getByRole('button', { name: 'Save locally' }).click();
   await expect(page.getByText(/Saved locally · revision \d+\./)).toBeVisible();
+
+  const storedBeforeNavigation = await readStoredProjects(page);
+  console.info('[project-storage] favorite project before navigation:', JSON.stringify(storedBeforeNavigation));
+  expect(storedBeforeNavigation).toEqual(expect.arrayContaining([
+    expect.objectContaining({ name: projectName, revision: 1 }),
+  ]));
 
   await page.goto('/projects');
   const card = page.locator('.project-card').filter({ hasText: projectName });
