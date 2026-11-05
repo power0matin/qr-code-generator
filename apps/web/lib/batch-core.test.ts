@@ -22,7 +22,7 @@ describe('batch preparation', () => {
 
   it('treats prototype-sensitive CSV headers as ordinary data', () => {
     const jobs = prepareBatchJobs(
-      '__proto__,constructor,name\\nliteral,ordinary,Ada',
+      '__proto__,constructor,name\nliteral,ordinary,Ada',
       'csv',
       '{{__proto__}}|{{constructor}}|{{name}}|{{toString}}',
       'qr-{{index}}',
