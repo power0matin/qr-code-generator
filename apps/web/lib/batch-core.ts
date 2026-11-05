@@ -93,7 +93,7 @@ function parseJsonRows(text: string): readonly Readonly<Record<string, string>>[
   if (!Array.isArray(parsed)) throw new Error('Batch JSON must be an array.');
   return parsed.map((item) => {
     if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-      const record: Record<string, string> = {};
+      const record = Object.create(null) as Record<string, string>;
       for (const [key, value] of Object.entries(item)) record[key] = scalarToString(value);
       return record;
     }
