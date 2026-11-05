@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
+import { readStoredProjects } from './project-storage';
 
 function csvRows(count: number): string {
   return ['name,url', ...Array.from({ length: count }, (_, index) => `item-${index + 1},https://example.com/${index + 1}`)].join('\n');
@@ -74,6 +75,12 @@ test('project tags and revision history persist locally', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /Design history/ })).toBeVisible();
   await expect(page.getByText('Revision 2 · current')).toBeVisible();
   await expect(page.getByText('Revision 1', { exact: true })).toBeVisible();
+
+  const storedBeforeNavigation = await readStoredProjects(page);
+  console.info('[project-storage] before projects navigation:', JSON.stringify(storedBeforeNavigation));
+  expect(storedBeforeNavigation).toEqual(expect.arrayContaining([
+    expect.objectContaining({ name, revision: 2, tags: expect.arrayContaining(['approved']) }),
+  ]));
 
   await page.goto('/projects');
   const card = page.locator('.project-card').filter({ hasText: name });
