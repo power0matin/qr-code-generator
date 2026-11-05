@@ -19,7 +19,7 @@ packages/shared
 
 ## Encoding vs rendering
 
-`@moduqr/core` calls the small `qr` encoder with raw matrix output and a one-module encoder border. `@moduqr/core` immediately strips that border, because `qr@0.6.0` rejects a zero border; the visible quiet zone remains fully owned by ModuQR. The renderer never asks the encoder for styled SVG. Finder rendering, module shapes, quiet zone, gradients, logo cutouts and frames are owned by `@moduqr/renderer`.
+`@moduqr/core` calls the pinned `qr@0.7.2` encoder with raw matrix output and a one-module encoder border, then immediately strips that border. The visible quiet zone remains fully owned by ModuQR. The renderer never asks the encoder for styled SVG. Finder rendering, module shapes, quiet zone, gradients, logo cutouts and frames are owned by `@moduqr/renderer`.
 
 This boundary is intentional: replacing the encoder should not require rewriting the visual system, and adding a visual style should not alter payload generation.
 
@@ -29,7 +29,7 @@ The current static product has no application API for QR generation. Payloads, l
 
 ## Document migrations
 
-Saved designs currently carry `version: 2`. `packages/core/src/project-schema.ts` can explicitly migrate schema-v1 documents into schema v2. Unknown or malformed JSON is rejected with Zod rather than silently coerced, and imported logo/paint fields are validated as part of that boundary.
+Saved designs currently carry `version: 3`, as defined by `DESIGN_SCHEMA_VERSION` in `packages/shared/src/index.ts`. `packages/core/src/project-schema.ts` explicitly migrates schema-v1 and schema-v2 documents into schema v3. The v1 migration adds Phase 2 finder overrides, background-gradient and region-style defaults; the v2 migration adds region styles. Both migrations initialize tags and revision metadata. Unknown or malformed JSON is rejected with Zod rather than silently coerced, and imported logo/paint fields are validated as part of that boundary.
 
 Every future schema increment must ship an explicit migration path for supported older documents before the new version becomes the default.
 

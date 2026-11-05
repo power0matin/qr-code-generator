@@ -36,7 +36,11 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    # Keep this image version aligned with apps/web's @playwright/test version.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --user 1001
     needs: quality
     steps:
       - uses: actions/checkout@v7
@@ -49,7 +53,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @moduqr/web build
-      - run: pnpm --filter @moduqr/web exec playwright install --with-deps chromium firefox webkit
       - run: pnpm --filter @moduqr/web test:e2e
         env:
           CI: 'true'

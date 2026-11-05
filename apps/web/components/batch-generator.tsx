@@ -7,7 +7,7 @@ import { Download, FileArchive, FileCheck2, FileUp, LoaderCircle, OctagonX } fro
 import { useMemo, useRef, useState } from 'react';
 import { prepareBatchJobs, type BatchInputFormat, type BatchJob } from '@/lib/batch-core';
 import { verifyRenderedSvg } from '@/lib/export';
-import { svgToCanvas } from '@/lib/qr-image';
+import { decodeRasterBlob, svgToCanvas } from '@/lib/qr-image';
 import { createStoreZip, type ZipEntry } from '@/lib/zip';
 
 type BatchOutput = 'svg-zip' | 'png-zip' | 'pdf-sheet';
@@ -195,6 +195,8 @@ export function BatchGenerator() {
           const rendered = renderQR(job.payload, preset.style);
           if (!await verifyRenderedSvg(rendered.svg, job.payload, 420)) throw new Error(`Row ${index + 1} failed decode verification with preset “${preset.name}”.`);
           const canvas = await svgToCanvas(rendered.svg, 640, false, '#ffffff');
+          const png = await canvasBlob(canvas, 'image/png');
+          if (await decodeRasterBlob(png) !== job.payload) throw new Error(`Row ${index + 1} failed raster PDF verification.`);
           if (index > 0 && index % perPage === 0) pdf.addPage();
           const pageIndex = index % perPage;
           const col = pageIndex % columns;
@@ -222,6 +224,7 @@ export function BatchGenerator() {
           } else {
             const canvas = await svgToCanvas(rendered.svg, 768, false, '#ffffff');
             const png = await canvasBlob(canvas, 'image/png');
+            if (await decodeRasterBlob(png) !== job.payload) throw new Error(`Row ${index + 1} failed compressed PNG verification.`);
             entries.push({ name: `${prefix}-${job.filename}.png`, data: new Uint8Array(await png.arrayBuffer()) });
           }
           setProgress(Math.round((index + 1) / total * 100));

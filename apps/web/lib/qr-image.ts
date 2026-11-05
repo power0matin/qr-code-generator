@@ -45,6 +45,25 @@ export function decodeCanvas(canvas: HTMLCanvasElement): string | null {
   }
 }
 
+export async function decodeRasterBlob(blob: Blob): Promise<string | null> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = await loadImage(url);
+    const width = image.naturalWidth;
+    const height = image.naturalHeight;
+    if (width < 1 || height < 1 || width > 8192 || height > 8192 || width * height > 32_000_000) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.drawImage(image, 0, 0);
+    return decodeCanvas(canvas);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 const MAX_SCAN_IMAGE_DIMENSION = 12_000;
 const MAX_SCAN_IMAGE_PIXELS = 32_000_000;
 

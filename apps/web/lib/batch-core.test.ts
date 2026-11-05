@@ -20,6 +20,26 @@ describe('batch preparation', () => {
     expect(() => prepareBatchJobs(make(MAX_BATCH_ROWS + 1), 'csv', '{{url}}', 'qr-{{index}}')).toThrow(/500 rows/);
   });
 
+  it('treats prototype-sensitive CSV headers as ordinary data', () => {
+    const jobs = prepareBatchJobs(
+      '__proto__,constructor,name\nliteral,ordinary,Ada',
+      'csv',
+      '{{__proto__}}|{{constructor}}|{{name}}|{{toString}}',
+      'qr-{{index}}',
+    );
+    expect(jobs[0]?.payload).toBe('literal|ordinary|Ada|');
+  });
+
+  it('treats a JSON __proto__ key as an ordinary template value', () => {
+    const jobs = prepareBatchJobs(
+      '[{"__proto__":"literal","constructor":"ordinary"}]',
+      'json',
+      '{{__proto__}}|{{constructor}}|{{toString}}',
+      'qr-{{index}}',
+    );
+    expect(jobs[0]?.payload).toBe('literal|ordinary|');
+  });
+
   it('rejects empty payload templates per row', () => {
     expect(() => prepareBatchJobs('name\nAda', 'csv', '{{missing}}', '{{name}}')).toThrow(/empty payload/);
   });
