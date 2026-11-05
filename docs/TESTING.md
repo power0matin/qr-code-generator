@@ -46,7 +46,9 @@ When `PLAYWRIGHT_USE_PRODUCTION_BUILD=1`, Playwright starts `next start` itself 
 
 ## CI browser matrix
 
-After the production app builds, CI exercises Chromium, Firefox, WebKit, desktop/mobile viewport profiles and the same E2E suite. The service-worker test registers `/sw.js` explicitly during local development because the application intentionally does not auto-register production caching in `next dev`. Development cleanup runs once per tab, so the test can reload under the manually registered worker without immediately unregistering it again.
+After the production app builds, CI runs Chromium, Firefox and WebKit from the official Playwright container image. Keep the image tag aligned with the exact `@playwright/test` version in `apps/web/package.json`; the image supplies the matching browser binaries and system dependencies, so the workflow must not run `playwright install --with-deps` again. This avoids slow, runner-OS-dependent package installation during every E2E run.
+
+The matrix covers desktop and mobile viewport profiles with the same E2E suite. The service-worker test registers `/sw.js` explicitly during local development because the application intentionally does not auto-register production caching in `next dev`. Development cleanup runs once per tab, so the test can reload under the manually registered worker without immediately unregistering it again.
 
 ## QR round trip
 
