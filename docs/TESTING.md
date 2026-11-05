@@ -7,8 +7,8 @@ The release gate is intentionally layered:
 3. TypeScript strict mode with `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
 4. Vitest unit/regression tests for payloads, project imports/migrations, renderer behavior, safety scoring and presets
 5. Next.js production build
-6. Playwright browser/E2E matrix
-7. axe-core smoke tests with serious/critical violations treated as failures
+6. Playwright browser/E2E matrix, including full-capacity batch export acceptance
+7. axe-core smoke tests with serious/critical violations treated as failures (run by the E2E suite)
 8. production dependency audit at `high` severity and CodeQL
 
 ## Local browser tests
@@ -50,13 +50,13 @@ After the production app builds, CI exercises Chromium, Firefox, WebKit, desktop
 
 ## QR round trip
 
-The critical browser tests capture output produced by the ModuQR renderer, feed the resulting image to the local decoder, and check that the exact payload survives the round trip. Regression tests also cover logos, gradients, neighbour-aware modules, independent finder overrides and all shipped presets.
+The critical browser tests capture output produced by the ModuQR renderer, feed the resulting image to the local decoder, and check that the exact payload survives the round trip. Regression tests also cover logos, gradients, neighbour-aware modules, independent finder overrides and all shipped presets. Batch acceptance covers the 500-row Worker preparation boundary, rejects row 501, verifies all 500 SVG ZIP entries in a full-capacity browser export, and exercises PNG ZIP/PDF export with raster decode checks.
 
 Over-capacity payloads are expected to fail *safely*: the studio remains mounted, reports an encoding failure and disables export instead of crashing React.
 
 ## Persistence and import regressions
 
-Tests cover schema v1 → v2 migration, unsafe imported design rejection and the project favorite/load/save path. IndexedDB writes resolve only after the transaction has completed.
+Tests cover schema v1 → v3 and v2 → v3 migration, unsafe imported design rejection and the project favorite/load/save path. IndexedDB writes resolve only after the transaction has completed.
 
 ## Responsive matrix
 
