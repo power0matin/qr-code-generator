@@ -28,6 +28,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Design tabs now use a keyboard-friendly roving tab stop with Arrow/Home/End navigation, and advanced range controls match the renderer/import schema limits.
 
 ### Fixed
+- Parse CSV/TSV/JSON batch rows into prototype-free records so untrusted `__proto__` and inherited-property names remain ordinary data.
+- Decode-check rasterized batch PNG/PDF content before packaging or embedding it in a PDF sheet.
 - Replaced the removed Lucide GitHub brand export with a dependency-independent accessible repository icon.
 - Added real web-package unit coverage for public URL/repository normalization so the workspace test command no longer fails on an empty Vitest suite.
 - Moved the web Vitest config to native ESM (`vitest.config.mjs`) to avoid the CommonJS/ESM config-loader warning.
@@ -55,6 +57,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Release and CI installs use the committed lockfile with `--frozen-lockfile`; release verification also runs the production dependency audit, and CI uses bounded job timeouts with stale-run cancellation.
 
 ### Tests
+- Added batch regressions for prototype-sensitive headers, PNG ZIP/PDF raster verification, and a full 500-row verified SVG ZIP export.
 - Added regressions for v1/v2→v3 migration/import safety, payload edge cases, QR capacity failure, favorite/history persistence, logo MIME/SVG hardening, region/frame rendering, design-share privacy, batch parsing/limits, print planning, Auto Fix, resolution-invariant obstruction scoring, finder/gradient contrast, runtime renderer hardening, PWA behavior, dynamic-roadmap `noindex`, keyboard tab navigation, RTL and responsive overflow.
 - Browser QA covers renderer→scanner round trips, all shipped presets, advanced styles, exports, accessibility, and mobile/desktop behavior.
 
