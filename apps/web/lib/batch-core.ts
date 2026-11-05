@@ -80,7 +80,7 @@ function parseDelimited(text: string, delimiter: ',' | '\t'): readonly Readonly<
   }
 
   return nonBlank.slice(1).map((cells) => {
-    const record: Record<string, string> = {};
+    const record = Object.create(null) as Record<string, string>;
     headers.forEach((header, index) => { record[header] = cells[index] ?? ''; });
     return record;
   });
