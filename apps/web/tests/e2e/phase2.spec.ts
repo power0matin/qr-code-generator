@@ -64,7 +64,11 @@ test('per-region styling remains usable at mobile width without horizontal overf
 test('project tags and revision history persist locally', async ({ page }) => {
   const name = `phase2-history-${Date.now()}`;
   await page.goto('/generator');
-  await page.getByLabel('Project name').fill(name);
+  await expect(page.getByRole('heading', { name: 'QR Studio' })).toBeVisible();
+  await expect(page.getByLabel('Decode status')).toHaveText('✓ Decodes', { timeout: 15_000 });
+  const projectNameInput = page.getByLabel('Project name');
+  await projectNameInput.fill(name);
+  await expect(projectNameInput).toHaveValue(name);
   await page.getByLabel('Project tags').fill('campaign, print');
   await page.getByRole('button', { name: 'Save locally' }).click();
   await expect(page.getByRole('status')).toContainText('Saved locally · revision 1.');
