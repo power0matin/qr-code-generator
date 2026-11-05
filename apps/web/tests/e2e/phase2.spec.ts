@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 function csvRows(count: number): string {
@@ -100,4 +101,54 @@ test('editor remains structurally usable under RTL direction at a touch viewport
   await expect(page.getByLabel('Find preset')).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   expect(overflow).toBe(false);
+});
+
+
+function zipEntryCount(bytes: Buffer): number {
+  const signature = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
+  const offset = bytes.lastIndexOf(signature);
+  if (offset < 0 || offset + 12 > bytes.length) return -1;
+  return bytes.readUInt16LE(offset + 10);
+}
+
+test('batch exports verified SVG ZIP, PNG ZIP and PDF sheet files', async ({ page }) => {
+  await page.goto('/batch-qr-code-generator');
+  await page.getByLabel('Dataset').fill(csvRows(2));
+
+  for (const output of ['svg-zip', 'png-zip', 'pdf-sheet'] as const) {
+    await page.locator('#batch-output').selectOption(output);
+    const downloadPromise = page.waitForEvent('download', { timeout: 90_000 });
+    await page.getByRole('button', { name: 'Generate' }).click();
+    const download = await downloadPromise;
+    const path = await download.path();
+    if (!path) throw new Error('Batch export download is unavailable.');
+    const bytes = await readFile(path);
+
+    if (output === 'pdf-sheet') {
+      expect(bytes.subarray(0, 4).toString('ascii')).toBe('%PDF');
+    } else {
+      expect(bytes.readUInt32LE(0)).toBe(0x04034b50);
+      expect(zipEntryCount(bytes)).toBe(2);
+    }
+    await expect(page.getByRole('status')).toContainText('Batch complete: 2 verified QR codes exported.', { timeout: 90_000 });
+  }
+});
+
+test('full-capacity batch exports 500 verified SVG QR codes', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'Run the expensive full-capacity export once on Chromium.');
+  test.setTimeout(8 * 60_000);
+  await page.goto('/batch-qr-code-generator');
+  await page.getByLabel('Dataset').fill(csvRows(500));
+  await page.locator('#batch-output').selectOption('svg-zip');
+
+  const downloadPromise = page.waitForEvent('download', { timeout: 7 * 60_000 });
+  await page.getByRole('button', { name: 'Generate' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('moduqr-batch-500.zip');
+  await expect(page.getByRole('status')).toContainText('Batch complete: 500 verified QR codes exported.', { timeout: 7 * 60_000 });
+  const path = await download.path();
+  if (!path) throw new Error('500-row batch download is unavailable.');
+  const bytes = await readFile(path);
+  expect(bytes.readUInt32LE(0)).toBe(0x04034b50);
+  expect(zipEntryCount(bytes)).toBe(500);
 });
