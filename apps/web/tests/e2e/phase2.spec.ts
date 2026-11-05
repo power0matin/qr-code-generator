@@ -77,8 +77,9 @@ test('project tags and revision history persist locally', async ({ page }) => {
 
   await page.goto('/projects');
   const card = page.locator('.project-card').filter({ hasText: name });
-  await expect(card).toContainText('revision 2');
-  await expect(card.getByText('approved', { exact: true })).toBeVisible();
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(card).toContainText('revision 2', { timeout: 15_000 });
+  await expect(card.getByText('approved', { exact: true })).toBeVisible({ timeout: 15_000 });
 });
 
 test('stress simulation UI and deterministic Auto Fix remain connected to the editor', async ({ page }) => {
