@@ -277,9 +277,18 @@ test('saved WiFi project cards do not expose credentials', async ({ page }) => {
 test('saving a loaded favorite project preserves its favorite state', async ({ page }) => {
   const projectName = `favorite-regression-${Date.now()}`;
   await page.goto('/generator');
-  await page.getByLabel('Project name').fill(projectName);
+  await expectDecodable(page);
+  const projectNameInput = page.getByLabel('Project name');
+  await projectNameInput.fill(projectName);
+  await expect(projectNameInput).toHaveValue(projectName);
   await page.getByRole('button', { name: 'Save locally' }).click();
   await expect(page.getByText(/Saved locally · revision \d+\./)).toBeVisible();
+
+  const storedBeforeNavigation = await readStoredProjects(page);
+  console.info('[project-storage] favorite regression before projects navigation:', JSON.stringify(storedBeforeNavigation));
+  expect(storedBeforeNavigation).toEqual(expect.arrayContaining([
+    expect.objectContaining({ name: projectName, revision: 1 }),
+  ]));
 
   await page.goto('/projects');
   const firstCard = page.locator('.project-card').filter({ hasText: projectName });
