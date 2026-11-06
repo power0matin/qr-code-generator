@@ -9,9 +9,13 @@ corepack pnpm build
 corepack pnpm --filter @moduqr/web start
 ```
 
-Set `NEXT_PUBLIC_SITE_URL` to the public HTTPS origin so canonical, sitemap and OpenGraph metadata are correct. Invalid/non-HTTP(S) values fall back to the localhost development origin instead of crashing metadata generation.
+Set `NEXT_PUBLIC_SITE_URL` to the public HTTPS origin **before running `pnpm build`** so canonical, sitemap, OpenGraph metadata and HTTPS-only security headers use the real production origin. This is a Next.js public build-time variable: rebuild the app whenever the public origin changes. Invalid/non-HTTP(S) values fall back to the localhost development origin instead of crashing metadata generation.
 
 Set `NEXT_PUBLIC_REPOSITORY_URL` to the HTTPS `github.com` repository URL if the header should expose the GitHub shortcut.
+
+## Runtime requirements
+
+Use Node.js 22.14 or newer and pnpm 10.15.0. Run the production server with `corepack pnpm --filter @moduqr/web start` after a successful workspace build. Place the app behind an HTTPS reverse proxy in production and forward the original host/protocol correctly.
 
 ## HTTPS
 
