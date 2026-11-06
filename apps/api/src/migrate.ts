@@ -27,7 +27,7 @@ function buildMigrationScript(version: string, checksum: string, migrationSql: s
     '\\echo migration already applied',
     '\\else',
     '\\echo migration checksum mismatch',
-    "DO $ BEGIN RAISE EXCEPTION 'migration checksum mismatch'; END $;",
+    "DO $moduqr$ BEGIN RAISE EXCEPTION 'migration checksum mismatch'; END $moduqr$;",
     '\\endif',
     '\\else',
     migrationSql.trim(),
