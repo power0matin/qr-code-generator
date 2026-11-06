@@ -1,7 +1,9 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createApiDatabase } from './database-client.js';
 import { loadApiConfig } from './config.js';
 import { createDatabaseProbe } from './database.js';
+import { handleApiKeyRequest } from './api-key-handler.js';
 import { createHealthServer } from './health-server.js';
 import { writeLog } from './logger.js';
 
@@ -18,8 +20,11 @@ export function startServer(): void {
     return;
   }
 
+  const database = createApiDatabase(config.databaseUrl);
   const server = createHealthServer({
     probeDatabase: createDatabaseProbe(config.databaseEnvironment),
+    handleApiRequest: (request, response, requestId) =>
+      handleApiKeyRequest(database, request, response, requestId),
   });
 
   server.once('error', () => {
@@ -28,6 +33,9 @@ export function startServer(): void {
       port: config.port,
     });
     process.exitCode = 1;
+    void database.end({ timeout: 5 }).catch(() => {
+      process.exitCode = 1;
+    });
   });
 
   server.listen(config.port, config.host, () => {
@@ -58,7 +66,15 @@ export function startServer(): void {
         process.exitCode = 1;
         return;
       }
-      writeLog('info', 'server_shutdown_complete', { signal });
+
+      void database.end({ timeout: 5 }).then(() => {
+        writeLog('info', 'server_shutdown_complete', { signal });
+      }).catch(() => {
+        writeLog('error', 'server_shutdown_failed', {
+          reason: 'database_pool_close_failed',
+        });
+        process.exitCode = 1;
+      });
     });
   };
 

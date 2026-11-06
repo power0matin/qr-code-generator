@@ -5,6 +5,7 @@ const allowedSslModes = new Set([
 export interface ApiRuntimeConfig {
   readonly host: string;
   readonly port: number;
+  readonly databaseUrl: string;
   readonly databaseEnvironment: NodeJS.ProcessEnv;
 }
 
@@ -99,6 +100,7 @@ export function loadApiConfig(environment: NodeJS.ProcessEnv): ApiRuntimeConfig 
   return {
     host,
     port,
+    databaseUrl,
     databaseEnvironment: parseDatabaseUrl(databaseUrl),
   };
 }

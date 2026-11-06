@@ -11,6 +11,7 @@ export type HealthLogger = (
 
 export interface HealthServerOptions {
   readonly probeDatabase: DatabaseProbe;
+  readonly handleApiRequest?: (request: IncomingMessage, response: ServerResponse, requestId: string) => Promise<void>;
   readonly log?: HealthLogger;
 }
 
@@ -39,11 +40,12 @@ function sendJson(
   response.end(method === 'HEAD' ? undefined : body);
 }
 
-function getRoute(request: IncomingMessage): 'live' | 'ready' | 'unknown' {
+function getRoute(request: IncomingMessage): 'live' | 'ready' | 'api' | 'unknown' {
   try {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
     if (pathname === '/health/live') return 'live';
     if (pathname === '/health/ready') return 'ready';
+    if (pathname === '/v1' || pathname.startsWith('/v1/')) return 'api';
   } catch {
     return 'unknown';
   }
@@ -67,7 +69,18 @@ export function createHealthServer(options: HealthServerOptions): Server {
       const route = getRoute(request);
       let statusCode = 200;
 
-      if (method !== 'GET' && method !== 'HEAD') {
+      if (route === 'api' && options.handleApiRequest) {
+        try {
+          await options.handleApiRequest(request, response, requestId);
+          statusCode = response.statusCode;
+        } catch {
+          statusCode = 503;
+          sendJson(response, method, statusCode, {
+            error: { code: 'service_unavailable', message: 'API request could not be completed' },
+            requestId,
+          }, requestId);
+        }
+      } else if (method !== 'GET' && method !== 'HEAD') {
         statusCode = 405;
         response.setHeader('allow', 'GET, HEAD');
         sendJson(response, method, statusCode, {

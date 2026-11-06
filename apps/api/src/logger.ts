@@ -16,7 +16,7 @@ export type LogEvent =
 
 export interface LogFields {
   readonly requestId?: string;
-  readonly route?: 'live' | 'ready' | 'unknown';
+  readonly route?: 'live' | 'ready' | 'api' | 'unknown';
   readonly method?: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | 'OTHER' | 'UNKNOWN';
   readonly statusCode?: number;
   readonly durationMs?: number;
@@ -25,7 +25,7 @@ export interface LogFields {
   readonly signal?: 'SIGINT' | 'SIGTERM';
   readonly migration?: string;
   readonly count?: number;
-  readonly reason?: 'invalid_or_missing_environment' | 'http_server_close_failed' | 'database_migration_error';
+  readonly reason?: 'invalid_or_missing_environment' | 'http_server_close_failed' | 'database_migration_error' | 'database_pool_close_failed';
 }
 
 const allowedMethods = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'OTHER', 'UNKNOWN']);
@@ -36,7 +36,7 @@ function sanitizeFields(fields: LogFields): Readonly<Record<string, string | num
   if (typeof fields.requestId === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(fields.requestId)) {
     safe['requestId'] = fields.requestId;
   }
-  if (fields.route === 'live' || fields.route === 'ready' || fields.route === 'unknown') {
+  if (fields.route === 'live' || fields.route === 'ready' || fields.route === 'api' || fields.route === 'unknown') {
     safe['route'] = fields.route;
   }
   if (typeof fields.method === 'string' && allowedMethods.has(fields.method)) {
@@ -66,7 +66,8 @@ function sanitizeFields(fields: LogFields): Readonly<Record<string, string | num
   if (
     fields.reason === 'invalid_or_missing_environment' ||
     fields.reason === 'http_server_close_failed' ||
-    fields.reason === 'database_migration_error'
+    fields.reason === 'database_migration_error' ||
+    fields.reason === 'database_pool_close_failed'
   ) {
     safe['reason'] = fields.reason;
   }
