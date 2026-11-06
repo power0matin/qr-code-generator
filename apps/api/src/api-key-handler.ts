@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { authenticateApiKey } from './api-key-auth.js';
 import {
+  hasApiKeyScope,
   parseApiKeyExpiry,
   parseApiKeyScopes,
 } from './api-key-crypto.js';
@@ -137,7 +138,7 @@ export async function handleApiKeyRequest(
     return;
   }
 
-  if (!identity.scopes.includes('keys:manage')) {
+  if (!hasApiKeyScope(identity.scopes, 'keys:manage')) {
     sendJson(response, 403, { error: { code: 'insufficient_scope', message: 'The API key lacks keys:manage scope' } }, requestId);
     return;
   }
@@ -216,14 +217,14 @@ export async function handleApiKeyRequest(
       return;
     }
 
-    const scopes = body['scopes'] === undefined ? undefined : parseApiKeyScopes(body['scopes']);
+    const parsedScopes = body['scopes'] === undefined ? undefined : parseApiKeyScopes(body['scopes']);
     const expiresAt = parseApiKeyExpiry(body['expiresAt']);
-    if ((body['scopes'] !== undefined && !scopes) || expiresAt === undefined) {
+    if ((body['scopes'] !== undefined && parsedScopes === null) || expiresAt === undefined) {
       sendJson(response, 400, { error: { code: 'invalid_key_policy', message: 'Scopes or expiry are invalid' } }, requestId);
       return;
     }
 
-    const issued = await rotateTenantApiKey(database, identity.tenantId, keyId, scopes, expiresAt);
+    const issued = await rotateTenantApiKey(database, identity.tenantId, keyId, parsedScopes ?? undefined, expiresAt);
     if (!issued) {
       sendJson(response, 404, { error: { code: 'not_found', message: 'API key not found' } }, requestId);
       return;
