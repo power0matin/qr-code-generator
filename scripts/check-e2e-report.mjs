@@ -16,8 +16,12 @@ if (!stats || !['expected', 'skipped', 'unexpected', 'flaky'].every((key) => Num
   throw new Error('Playwright JSON report does not contain valid expected/skipped/unexpected/flaky statistics.');
 }
 
+const expectedIntentionalSkips = 8;
 console.log(`Playwright acceptance: ${stats.expected} passed, ${stats.skipped} skipped, ${stats.unexpected} unexpected, ${stats.flaky} flaky.`);
 
 if (stats.unexpected > 0 || stats.flaky > 0) {
   throw new Error('Release gate requires zero unexpected and zero retry-flaky Playwright tests.');
+}
+if (stats.skipped !== expectedIntentionalSkips) {
+  throw new Error(`Expected exactly ${expectedIntentionalSkips} documented Chromium-only skips, received ${stats.skipped}. Review every changed skip before release.`);
 }
