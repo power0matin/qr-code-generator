@@ -73,6 +73,8 @@ jobs:
           DATABASE_URL: postgresql://moduqr:integration-only-password@127.0.0.1:5432/moduqr_test
       - name: Build the production API container
         run: docker build --file apps/api/Dockerfile --tag moduqr-api:ci .
+      - name: Smoke-test the runtime module loader
+        run: docker run --rm --entrypoint node moduqr-api:ci -e "import('./dist/server.js').then(() => process.stdout.write('api-module-load-ok\\n'))"
 
   e2e:
     runs-on: ubuntu-latest
