@@ -16,7 +16,7 @@ export type LogEvent =
 
 export interface LogFields {
   readonly requestId?: string;
-  readonly route?: 'live' | 'ready' | 'unknown';
+  readonly route?: 'live' | 'ready' | 'api' | 'unknown';
   readonly method?: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | 'OTHER' | 'UNKNOWN';
   readonly statusCode?: number;
   readonly durationMs?: number;
