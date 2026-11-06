@@ -64,6 +64,7 @@ describe('API key token security', () => {
     expect(parseApiKeyExpiry('2026-11-06T23:59:59.000Z', now)).toBeUndefined();
     expect(parseApiKeyExpiry('2027-11-08T00:00:00.000Z', now)).toBeUndefined();
     expect(parseApiKeyExpiry('not-a-date', now)).toBeUndefined();
+    expect(parseApiKeyExpiry('2027-01-01', now)).toBeUndefined();
     expect(isApiKeyExpired(null, now)).toBe(false);
     expect(isApiKeyExpired(new Date('2026-11-06T23:59:59.000Z'), now)).toBe(true);
   });
