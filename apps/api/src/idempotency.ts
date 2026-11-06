@@ -10,6 +10,44 @@ export function hashIdempotencyRequest(canonicalRequest: string): string {
   return createHash('sha256').update(canonicalRequest, 'utf8').digest('hex');
 }
 
+const forbiddenMetadataFields = new Set([
+  'token',
+  'secret',
+  'password',
+  'authorization',
+  'apikey',
+  'accesstoken',
+  'refreshtoken',
+  'secrethash',
+]);
+
+export function assertSafeIdempotencyMetadata(metadata: Record<string, unknown>): string {
+  const serialized = JSON.stringify(metadata);
+  if (Buffer.byteLength(serialized, 'utf8') > 8_192) {
+    throw new Error('Idempotency metadata exceeds the 8 KiB limit');
+  }
+
+  const inspect = (value: unknown, depth: number): void => {
+    if (depth > 8) throw new Error('Idempotency metadata is too deeply nested');
+    if (Array.isArray(value)) {
+      for (const item of value) inspect(item, depth + 1);
+      return;
+    }
+    if (value === null || typeof value !== 'object') return;
+
+    for (const [key, nested] of Object.entries(value)) {
+      const normalized = key.toLowerCase().replace(/[^a-z]/g, '');
+      if (forbiddenMetadataFields.has(normalized)) {
+        throw new Error('Idempotency metadata must not contain credentials or secrets');
+      }
+      inspect(nested, depth + 1);
+    }
+  };
+
+  inspect(metadata, 0);
+  return serialized;
+}
+
 export async function reserveIdempotencyRecord(
   database: ApiDatabase,
   tenantId: string,
@@ -26,6 +64,9 @@ export async function reserveIdempotencyRecord(
   }
   if (!/^[a-f0-9]{64}$/.test(requestHash)) {
     throw new Error('Idempotency request hash is invalid');
+  }
+  if (!(expiresAt instanceof Date) || !Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+    throw new Error('Idempotency expiry is invalid');
   }
 
   return database.begin(async (transaction) => {
@@ -91,12 +132,19 @@ export async function completeIdempotencyRecord(
   responseStatus: number,
   responseMetadata: Record<string, unknown>,
 ): Promise<boolean> {
+  if (!Number.isInteger(responseStatus) || responseStatus < 100 || responseStatus > 599) {
+    throw new Error('Idempotency response status is invalid');
+  }
+  if (!/^[A-Za-z0-9._:-]{1,128}$/.test(idempotencyKey) || operation.length < 1 || operation.length > 80 || !/^[a-f0-9]{64}$/.test(requestHash)) {
+    throw new Error('Idempotency completion identity is invalid');
+  }
+  const serializedMetadata = assertSafeIdempotencyMetadata(responseMetadata);
   const rows = await database.unsafe(
     'UPDATE moduqr.idempotency_records ' +
     'SET response_status = $5, response_metadata = $6::jsonb ' +
     'WHERE tenant_id = $1::uuid AND idempotency_key = $2 AND operation = $3 ' +
     'AND request_hash = $4 AND response_status IS NULL RETURNING idempotency_key',
-    [tenantId, idempotencyKey, operation, requestHash, responseStatus, JSON.stringify(responseMetadata)],
+    [tenantId, idempotencyKey, operation, requestHash, responseStatus, serializedMetadata],
   );
   return rows.length === 1;
 }
