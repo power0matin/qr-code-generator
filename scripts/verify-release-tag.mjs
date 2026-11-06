@@ -12,7 +12,7 @@ async function readPackage(relativePath) {
 
 const rootEntry = await readPackage('.');
 const packageVersion = rootEntry.packageJson.version;
-const tag = process.argv[2] ?? process.env['GITHUB_REF_NAME'];
+const tag = process.argv[2] ?? (process.env['GITHUB_REF_TYPE'] === 'tag' ? process.env['GITHUB_REF_NAME'] : undefined) ?? (typeof packageVersion === 'string' ? `v${packageVersion}` : undefined);
 
 if (typeof packageVersion !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(packageVersion)) {
   throw new Error(`Invalid root package version: ${String(packageVersion)}`);
