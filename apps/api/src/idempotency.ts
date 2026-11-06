@@ -54,7 +54,7 @@ export async function reserveIdempotencyRecord(
       requestHash: string;
       operation: string;
       responseStatus: number | null;
-      responseMetadata: Record<string, unknown>;
+      responseMetadata: Record<string, unknown> | string;
       expiresAt: Date;
     }>;
 
@@ -62,10 +62,22 @@ export async function reserveIdempotencyRecord(
     if (!record || record.expiresAt.getTime() <= Date.now()) return { state: 'conflict' };
     if (record.requestHash !== requestHash || record.operation !== operation) return { state: 'conflict' };
 
+    let responseMetadata: Record<string, unknown> = {};
+    try {
+      const decoded: unknown = typeof record.responseMetadata === 'string'
+        ? JSON.parse(record.responseMetadata)
+        : record.responseMetadata;
+      if (decoded !== null && typeof decoded === 'object' && !Array.isArray(decoded)) {
+        responseMetadata = decoded as Record<string, unknown>;
+      }
+    } catch {
+      return { state: 'conflict' };
+    }
+
     return {
       state: 'replay',
       responseStatus: record.responseStatus,
-      responseMetadata: record.responseMetadata,
+      responseMetadata,
     };
   });
 }
