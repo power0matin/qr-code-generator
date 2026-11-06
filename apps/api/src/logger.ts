@@ -36,7 +36,7 @@ function sanitizeFields(fields: LogFields): Readonly<Record<string, string | num
   if (typeof fields.requestId === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(fields.requestId)) {
     safe['requestId'] = fields.requestId;
   }
-  if (fields.route === 'live' || fields.route === 'ready' || fields.route === 'unknown') {
+  if (fields.route === 'live' || fields.route === 'ready' || fields.route === 'api' || fields.route === 'unknown') {
     safe['route'] = fields.route;
   }
   if (typeof fields.method === 'string' && allowedMethods.has(fields.method)) {
