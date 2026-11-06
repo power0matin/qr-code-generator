@@ -47,11 +47,12 @@ async function apiRequest(
   if (options.token) headers['authorization'] = 'Bearer ' + options.token;
   if (options.body !== undefined) headers['content-type'] = 'application/json';
 
-  return fetch(origin + path, {
+  const init: RequestInit = {
     method: options.method ?? 'GET',
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  };
+  if (options.body !== undefined) init.body = JSON.stringify(options.body);
+  return fetch(origin + path, init);
 }
 
 async function responseJson(response: Response): Promise<Record<string, unknown>> {
