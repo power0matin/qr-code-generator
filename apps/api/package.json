@@ -14,9 +14,9 @@
     "migrate": "node dist/migrate.js"
   },
   "devDependencies": {
-    "@types/node": "26.6.5",
+    "@types/node": "26.6.6",
     "eslint": "9.34.0",
-    "eslint-config-next": "16.4.2",
+    "eslint-config-next": "16.4.5",
     "typescript": "5.8.3",
     "vitest": "4.1.11"
   }
