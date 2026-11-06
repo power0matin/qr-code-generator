@@ -27,6 +27,7 @@ RUN apk add --no-cache postgresql-client \
   && chown node:node /app
 
 WORKDIR /app
+COPY --from=build --chown=node:node /workspace/apps/api/package.json ./package.json
 COPY --from=build --chown=node:node /workspace/apps/api/dist ./dist
 COPY --from=build --chown=node:node /workspace/apps/api/migrations ./migrations
 
