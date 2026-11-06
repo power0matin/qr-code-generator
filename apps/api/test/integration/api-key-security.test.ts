@@ -244,5 +244,28 @@ describe('Phase 3B tenant API-key security', () => {
       requestHash,
     );
     expect(separateTenantKey.state).toBe('created');
+
+    const reusableIdempotencyKey = 'expired-' + randomUUID();
+    const firstReservation = await reserveIdempotencyRecord(
+      database,
+      bootstrapTenantId,
+      reusableIdempotencyKey,
+      'link.create',
+      requestHash,
+    );
+    expect(firstReservation.state).toBe('created');
+    await database.unsafe(
+      "UPDATE moduqr.idempotency_records SET expires_at = now() - interval '1 second' " +
+      'WHERE tenant_id = $1::uuid AND idempotency_key = $2',
+      [bootstrapTenantId, reusableIdempotencyKey],
+    );
+    const reusedReservation = await reserveIdempotencyRecord(
+      database,
+      bootstrapTenantId,
+      reusableIdempotencyKey,
+      'link.create',
+      hashIdempotencyRequest('a fresh request'),
+    );
+    expect(reusedReservation.state).toBe('created');
   }, 60_000);
 });
