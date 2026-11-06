@@ -37,6 +37,10 @@ Every future schema increment must ship an explicit migration path for supported
 
 IndexedDB operations resolve after their transaction completes rather than at individual request success. This makes the in-memory UI state reflect committed browser storage, not an optimistic request callback.
 
+## Future platform architecture
+
+The optional server mode and developer platform are design-only; they are not included in the v0.1.0 release. See [Phase 3 — Dynamic Platform](PHASE3-DYNAMIC-PLATFORM.md) for the proposed API, tenant model, dynamic redirects, privacy-preserving analytics, key management, deployment and acceptance boundaries.
+
 ## Future packages
 
 `react`, `sdk`, `cli`, and `mcp` are deliberately absent until their actual public APIs exist. Empty packages would create false stability commitments.
