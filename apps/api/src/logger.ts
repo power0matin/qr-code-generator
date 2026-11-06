@@ -25,7 +25,7 @@ export interface LogFields {
   readonly signal?: 'SIGINT' | 'SIGTERM';
   readonly migration?: string;
   readonly count?: number;
-  readonly reason?: 'invalid_or_missing_environment' | 'http_server_close_failed' | 'database_migration_error';
+  readonly reason?: 'invalid_or_missing_environment' | 'http_server_close_failed' | 'database_migration_error' | 'database_pool_close_failed';
 }
 
 const allowedMethods = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'OTHER', 'UNKNOWN']);
@@ -66,7 +66,8 @@ function sanitizeFields(fields: LogFields): Readonly<Record<string, string | num
   if (
     fields.reason === 'invalid_or_missing_environment' ||
     fields.reason === 'http_server_close_failed' ||
-    fields.reason === 'database_migration_error'
+    fields.reason === 'database_migration_error' ||
+    fields.reason === 'database_pool_close_failed'
   ) {
     safe['reason'] = fields.reason;
   }
