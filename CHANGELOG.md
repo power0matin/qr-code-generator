@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-06
+
 ### Added
 - pnpm monorepo with separated web, core, renderer, preset, scan-validation, and shared packages.
 - Ten static payload types with Smart Detect parsing and editable structured inputs.
@@ -44,6 +46,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Expanded Safety checks to include inherited/custom finder contrast and full logo-footprint risk without incorrectly treating raster export resolution as reduced obstruction.
 - Fixed strict TypeScript, React Hooks, accessibility, color-contrast, local Playwright, and Windows Corepack issues found during QA.
 - Guarded same-tab project/redesign handoff when session storage is unavailable instead of allowing storage exceptions to break the UI.
+- Prevented batch preparation before the dataset editor is hydrated and removed the silent fallback to the two-row sample dataset when the textarea ref is unavailable.
 - Made development service-worker cleanup one-time per tab so stale caches are removed without breaking local offline tests after reload.
 - Enabled HSTS and `upgrade-insecure-requests` only for a configured HTTPS public origin, preserving local production/CI testing over HTTP.
 - Normalized public metadata origins and repository links and removed obsolete OpenGraph SVG artwork.
@@ -61,4 +64,4 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Added regressions for v1/v2→v3 migration/import safety, payload edge cases, QR capacity failure, favorite/history persistence, logo MIME/SVG hardening, region/frame rendering, design-share privacy, batch parsing/limits, print planning, Auto Fix, resolution-invariant obstruction scoring, finder/gradient contrast, runtime renderer hardening, PWA behavior, dynamic-roadmap `noindex`, keyboard tab navigation, RTL and responsive overflow.
 - Browser QA covers renderer→scanner round trips, all shipped presets, advanced styles, exports, accessibility, and mobile/desktop behavior.
 
-> The first public release, `v0.1.0`, remains gated on a clean install from the committed lockfile and the complete lint, typecheck, unit, production-build, browser, accessibility, dependency-audit, and security acceptance matrix. Roadmap phase numbers do not determine SemVer major versions.
+> ModuQR `v0.1.0` is a pre-1.0 static web application release. The Dynamic server platform is not included. Roadmap phase numbers do not determine SemVer major versions.
