@@ -16,6 +16,13 @@ export interface IssuedApiKey extends ApiKeyMetadata {
   readonly token: string;
 }
 
+export class LastManagingApiKeyError extends Error {
+  constructor() {
+    super('The last active keys:manage API key cannot be revoked');
+    this.name = 'LastManagingApiKeyError';
+  }
+}
+
 interface KeyRow {
   readonly id: string;
   readonly prefix: string;
@@ -43,8 +50,12 @@ export async function bootstrapTenant(
   tenantName: string,
 ): Promise<{ tenantId: string; tenantName: string; apiKey: IssuedApiKey }> {
   const normalizedName = tenantName.trim();
-  if (normalizedName.length < 1 || normalizedName.length > 120) {
-    throw new Error('Tenant name must contain between 1 and 120 characters');
+  if (
+    normalizedName.length < 1 ||
+    normalizedName.length > 120 ||
+    /[\u0000-\u001f\u007f]/.test(normalizedName)
+  ) {
+    throw new Error('Tenant name must contain between 1 and 120 printable characters');
   }
 
   return database.begin(async (transaction) => {
@@ -56,8 +67,8 @@ export async function bootstrapTenant(
 
     const tenantId = randomUUID();
     const tenants = await transaction.unsafe(
-      'INSERT INTO moduqr.tenants (id, name, status, is_bootstrap_owner) ' +
-      'VALUES ($1::uuid, $2, \'active\', true) RETURNING id::text AS id, name',
+      "INSERT INTO moduqr.tenants (id, name, status, is_bootstrap_owner) " +
+      "VALUES ($1::uuid, $2, 'active', true) RETURNING id::text AS id, name",
       [tenantId, normalizedName],
     ) as Array<{ id: string; name: string }>;
 
@@ -92,18 +103,26 @@ export async function createTenantApiKey(
 ): Promise<IssuedApiKey> {
   const material = createApiKeyMaterial();
   const keyId = randomUUID();
-  const rows = await database.unsafe(
-    'INSERT INTO moduqr.api_keys (id, tenant_id, prefix, secret_hash, scopes, expires_at) ' +
-    'SELECT $1::uuid, tenants.id, $3, $4, $5::text[], $6 ' +
-    'FROM moduqr.tenants WHERE tenants.id = $2::uuid AND tenants.status = \'active\' ' +
-    'RETURNING id::text AS id, prefix, scopes, created_at AS "createdAt", ' +
-    'expires_at AS "expiresAt", last_used_at AS "lastUsedAt", revoked_at AS "revokedAt"',
-    [keyId, tenantId, material.prefix, material.secretHash, [...scopes], expiresAt],
-  ) as KeyRow[];
 
-  const row = rows[0];
-  if (!row) throw new Error('Tenant is unavailable');
-  return { ...toMetadata(row), token: material.token };
+  return database.begin(async (transaction) => {
+    const tenants = await transaction.unsafe(
+      "SELECT id FROM moduqr.tenants WHERE id = $1::uuid AND status = 'active' FOR UPDATE",
+      [tenantId],
+    );
+    if (tenants.length !== 1) throw new Error('Tenant is unavailable');
+
+    const rows = await transaction.unsafe(
+      'INSERT INTO moduqr.api_keys (id, tenant_id, prefix, secret_hash, scopes, expires_at) ' +
+      'VALUES ($1::uuid, $2::uuid, $3, $4, $5::text[], $6) ' +
+      'RETURNING id::text AS id, prefix, scopes, created_at AS "createdAt", ' +
+      'expires_at AS "expiresAt", last_used_at AS "lastUsedAt", revoked_at AS "revokedAt"',
+      [keyId, tenantId, material.prefix, material.secretHash, [...scopes], expiresAt],
+    ) as KeyRow[];
+
+    const row = rows[0];
+    if (!row) throw new Error('API key could not be created');
+    return { ...toMetadata(row), token: material.token };
+  });
 }
 
 export async function listTenantApiKeys(
@@ -126,12 +145,43 @@ export async function revokeTenantApiKey(
   keyId: string,
 ): Promise<boolean> {
   return database.begin(async (transaction) => {
+    const tenants = await transaction.unsafe(
+      'SELECT id FROM moduqr.tenants WHERE id = $1::uuid FOR UPDATE',
+      [tenantId],
+    );
+    if (tenants.length !== 1) return false;
+
+    const selected = await transaction.unsafe(
+      'SELECT scopes, expires_at AS "expiresAt", revoked_at AS "revokedAt" ' +
+      'FROM moduqr.api_keys WHERE id = $1::uuid AND tenant_id = $2::uuid FOR UPDATE',
+      [keyId, tenantId],
+    ) as Array<{
+      scopes: ApiKeyScope[];
+      expiresAt: Date | null;
+      revokedAt: Date | null;
+    }>;
+    const target = selected[0];
+    if (!target) return false;
+
+    const expired = target.expiresAt !== null && target.expiresAt.getTime() <= Date.now();
+    if (target.revokedAt === null && !expired && target.scopes.includes('keys:manage')) {
+      const otherManagers = await transaction.unsafe(
+        "SELECT id FROM moduqr.api_keys " +
+        "WHERE tenant_id = $1::uuid AND id <> $2::uuid " +
+        "AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now()) " +
+        "AND scopes @> ARRAY['keys:manage']::text[] LIMIT 1",
+        [tenantId, keyId],
+      );
+      if (otherManagers.length === 0) throw new LastManagingApiKeyError();
+    }
+
     const rows = await transaction.unsafe(
       'UPDATE moduqr.api_keys SET revoked_at = COALESCE(revoked_at, now()) ' +
       'WHERE id = $1::uuid AND tenant_id = $2::uuid RETURNING id',
       [keyId, tenantId],
     );
     if (rows.length !== 1) return false;
+
     await transaction.unsafe(
       'DELETE FROM moduqr.api_rate_limit_windows WHERE api_key_id = $1::uuid',
       [keyId],
@@ -151,6 +201,12 @@ export async function rotateTenantApiKey(
   const newKeyId = randomUUID();
 
   return database.begin(async (transaction) => {
+    const tenantRows = await transaction.unsafe(
+      'SELECT id FROM moduqr.tenants WHERE id = $1::uuid AND status = $2 FOR UPDATE',
+      [tenantId, 'active'],
+    );
+    if (tenantRows.length !== 1) return null;
+
     const existing = await transaction.unsafe(
       'SELECT scopes, revoked_at AS "revokedAt", expires_at AS "expiresAt" ' +
       'FROM moduqr.api_keys WHERE id = $1::uuid AND tenant_id = $2::uuid FOR UPDATE',
@@ -167,6 +223,7 @@ export async function rotateTenantApiKey(
       [keyId, tenantId],
     );
     if (revoked.length !== 1) return null;
+
     await transaction.unsafe(
       'DELETE FROM moduqr.api_rate_limit_windows WHERE api_key_id = $1::uuid',
       [keyId],
