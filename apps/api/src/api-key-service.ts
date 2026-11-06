@@ -125,12 +125,19 @@ export async function revokeTenantApiKey(
   tenantId: string,
   keyId: string,
 ): Promise<boolean> {
-  const rows = await database.unsafe(
-    'UPDATE moduqr.api_keys SET revoked_at = COALESCE(revoked_at, now()) ' +
-    'WHERE id = $1::uuid AND tenant_id = $2::uuid RETURNING id',
-    [keyId, tenantId],
-  );
-  return rows.length === 1;
+  return database.begin(async (transaction) => {
+    const rows = await transaction.unsafe(
+      'UPDATE moduqr.api_keys SET revoked_at = COALESCE(revoked_at, now()) ' +
+      'WHERE id = $1::uuid AND tenant_id = $2::uuid RETURNING id',
+      [keyId, tenantId],
+    );
+    if (rows.length !== 1) return false;
+    await transaction.unsafe(
+      'DELETE FROM moduqr.api_rate_limit_windows WHERE api_key_id = $1::uuid',
+      [keyId],
+    );
+    return true;
+  });
 }
 
 export async function rotateTenantApiKey(
@@ -160,6 +167,10 @@ export async function rotateTenantApiKey(
       [keyId, tenantId],
     );
     if (revoked.length !== 1) return null;
+    await transaction.unsafe(
+      'DELETE FROM moduqr.api_rate_limit_windows WHERE api_key_id = $1::uuid',
+      [keyId],
+    );
 
     const rows = await transaction.unsafe(
       'INSERT INTO moduqr.api_keys (id, tenant_id, prefix, secret_hash, scopes, expires_at) ' +
