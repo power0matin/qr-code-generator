@@ -4,7 +4,7 @@ import { encodeMatrix } from '@moduqr/core';
 import { PRESETS, findPreset } from '@moduqr/presets';
 import { renderQR } from '@moduqr/renderer';
 import { Download, FileArchive, FileCheck2, FileUp, LoaderCircle, OctagonX } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { prepareBatchJobs, type BatchInputFormat, type BatchJob } from '@/lib/batch-core';
 import { verifyRenderedSvg } from '@/lib/export';
 import { decodeRasterBlob, svgToCanvas } from '@/lib/qr-image';
@@ -99,6 +99,11 @@ export function BatchGenerator() {
   const fileInput = useRef<HTMLInputElement>(null);
   const capacityInput = useRef<HTMLInputElement>(null);
   const datasetInput = useRef<HTMLTextAreaElement>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(datasetInput.current !== null);
+  }, []);
 
   const preset = useMemo(() => findPreset(presetId) ?? PRESETS[0], [presetId]);
 
@@ -109,8 +114,9 @@ export function BatchGenerator() {
       // Keep the large dataset in the DOM. This avoids a mobile-browser race
       // where a controlled textarea can briefly expose the previous React state
       // when the user prepares immediately after filling it.
-      const dataset = datasetInput.current?.value ?? sampleCsv;
-      const prepared = await prepareInWorker(dataset, format, payloadTemplate, filenameTemplate);
+      const input = datasetInput.current;
+      if (!ready || !input) throw new Error('The batch editor is not ready yet.');
+      const prepared = await prepareInWorker(input.value, format, payloadTemplate, filenameTemplate);
       setJobs(prepared);
       setStatus(`${prepared.length} rows prepared. Preview shows the first 10.`);
       return prepared;
@@ -241,16 +247,16 @@ export function BatchGenerator() {
     }
   };
 
-  return <div className="batch-layout">
+  return <div className="batch-layout" data-batch-ready={ready ? 'true' : 'false'}>
     <section className="panel batch-panel" aria-labelledby="batch-title">
       <div className="panel-header"><div><span className="eyebrow">Phase 2 · local batch</span><h1 id="batch-title">Batch QR Generator</h1><p>Prepare up to 500 QR codes from CSV, TSV or JSON without uploading the dataset.</p></div></div>
       <div className="form-stack">
-        <div className="batch-toolbar"><div className="field"><label htmlFor="batch-format">Input format</label><select id="batch-format" className="select" value={format} onChange={(event) => { setFormat(event.target.value as BatchInputFormat); setJobs([]); }}><option value="csv">CSV</option><option value="tsv">TSV</option><option value="json">JSON</option></select></div><button className="button" type="button" onClick={() => fileInput.current?.click()}><FileUp size={15}/>Load file</button><input ref={fileInput} hidden type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" onChange={(event) => void onDatasetFile(event.target.files?.[0])}/></div>
-        <div className="field"><label htmlFor="batch-data">Dataset</label><textarea ref={datasetInput} id="batch-data" className="textarea batch-textarea" defaultValue={sampleCsv} onInput={() => setJobs([])} spellCheck={false}/><span className="help">CSV/TSV first row is treated as headers. JSON accepts an array of objects or primitive values.</span></div>
+        <div className="batch-toolbar"><div className="field"><label htmlFor="batch-format">Input format</label><select id="batch-format" className="select" value={format} onChange={(event) => { setFormat(event.target.value as BatchInputFormat); setJobs([]); }}><option value="csv">CSV</option><option value="tsv">TSV</option><option value="json">JSON</option></select></div><button className="button" type="button" disabled={!ready} onClick={() => fileInput.current?.click()}><FileUp size={15}/>Load file</button><input ref={fileInput} hidden type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" onChange={(event) => void onDatasetFile(event.target.files?.[0])}/></div>
+        <div className="field"><label htmlFor="batch-data">Dataset</label><textarea ref={datasetInput} id="batch-data" className="textarea batch-textarea" defaultValue={sampleCsv} disabled={!ready} onInput={() => setJobs([])} spellCheck={false}/><span className="help">CSV/TSV first row is treated as headers. JSON accepts an array of objects or primitive values.</span></div>
         <div className="field"><label htmlFor="payload-template">Payload template</label><input id="payload-template" className="input" value={payloadTemplate} onChange={(event) => { setPayloadTemplate(event.target.value); setJobs([]); }} placeholder="https://example.com/{{slug}}"/><span className="help">Use variables such as <code>{'{{url}}'}</code>, <code>{'{{name}}'}</code> and <code>{'{{index}}'}</code>.</span></div>
         <div className="field"><label htmlFor="filename-template">Filename template</label><input id="filename-template" className="input" value={filenameTemplate} onChange={(event) => { setFilenameTemplate(event.target.value); setJobs([]); }} placeholder="qr-{{index}}"/></div>
         <div className="batch-toolbar"><div className="field"><label htmlFor="batch-preset">Preset</label><select id="batch-preset" className="select" value={presetId} onChange={(event) => setPresetId(event.target.value)}>{PRESETS.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.category}</option>)}</select></div><div className="field"><label htmlFor="batch-output">Output</label><select id="batch-output" className="select" value={output} onChange={(event) => setOutput(event.target.value as BatchOutput)}><option value="svg-zip">SVG ZIP</option><option value="png-zip">PNG ZIP</option><option value="pdf-sheet">PDF sheet</option></select></div></div>
-        <div className="project-actions"><button className="button" type="button" disabled={busy || preparing} onClick={() => { void prepare().catch(() => undefined); }}><FileCheck2 size={15}/>{preparing ? 'Preparing…' : 'Prepare & preview'}</button><button className="button accent" type="button" disabled={busy || preparing} onClick={() => void generate()}>{busy ? <LoaderCircle className="spin" size={15}/> : output === 'pdf-sheet' ? <Download size={15}/> : <FileArchive size={15}/>}Generate</button>{busy ? <button className="button danger" type="button" onClick={() => { cancelled.current = true; }}><OctagonX size={15}/>Cancel</button> : null}</div>
+        <div className="project-actions"><button className="button" type="button" disabled={!ready || busy || preparing} onClick={() => { void prepare().catch(() => undefined); }}><FileCheck2 size={15}/>{preparing ? 'Preparing…' : 'Prepare & preview'}</button><button className="button accent" type="button" disabled={!ready || busy || preparing} onClick={() => void generate()}>{busy ? <LoaderCircle className="spin" size={15}/> : output === 'pdf-sheet' ? <Download size={15}/> : <FileArchive size={15}/>}Generate</button>{busy ? <button className="button danger" type="button" onClick={() => { cancelled.current = true; }}><OctagonX size={15}/>Cancel</button> : null}</div>
         {busy ? <div className="progress-wrap" aria-live="polite"><progress max={100} value={progress}/><span>{progress}%</span></div> : null}
         {status ? <p className="help" role="status">{status}</p> : null}
       </div>

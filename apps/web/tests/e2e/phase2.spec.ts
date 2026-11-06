@@ -1,14 +1,22 @@
 import { readFile } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { readStoredProjects } from './project-storage';
 
 function csvRows(count: number): string {
   return ['name,url', ...Array.from({ length: count }, (_, index) => `item-${index + 1},https://example.com/${index + 1}`)].join('\n');
 }
 
-test('Phase 2 batch prepares the 500-row browser limit without navigating away', async ({ page }) => {
+async function openBatchPage(page: Page): Promise<void> {
   await page.goto('/batch-qr-code-generator');
-  await page.getByLabel('Dataset').fill(csvRows(500));
+  await expect(page.locator('.batch-layout')).toHaveAttribute('data-batch-ready', 'true');
+}
+
+test('Phase 2 batch prepares the 500-row browser limit without navigating away', async ({ page }) => {
+  await openBatchPage(page);
+  const dataset = page.getByLabel('Dataset');
+  const data = csvRows(500);
+  await dataset.fill(data);
+  await expect(dataset).toHaveValue(data);
   await page.getByRole('button', { name: 'Prepare & preview' }).click();
   await expect(page.getByRole('status')).toContainText('500 rows prepared', { timeout: 15_000 });
   await expect(page.getByText('500 prepared rows')).toBeVisible();
@@ -16,8 +24,11 @@ test('Phase 2 batch prepares the 500-row browser limit without navigating away',
 });
 
 test('Phase 2 batch rejects row 501 before QR rendering', async ({ page }) => {
-  await page.goto('/batch-qr-code-generator');
-  await page.getByLabel('Dataset').fill(csvRows(501));
+  await openBatchPage(page);
+  const dataset = page.getByLabel('Dataset');
+  const data = csvRows(501);
+  await dataset.fill(data);
+  await expect(dataset).toHaveValue(data);
   await page.getByRole('button', { name: 'Prepare & preview' }).click();
   await expect(page.getByRole('status')).toContainText('Batch is limited to 500 rows per run.', { timeout: 15_000 });
 });
@@ -124,7 +135,7 @@ function zipEntryCount(bytes: Buffer): number {
 }
 
 test('batch exports verified SVG ZIP, PNG ZIP and PDF sheet files', async ({ page }) => {
-  await page.goto('/batch-qr-code-generator');
+  await openBatchPage(page);
   await page.getByLabel('Dataset').fill(csvRows(2));
 
   for (const output of ['svg-zip', 'png-zip', 'pdf-sheet'] as const) {
@@ -149,7 +160,7 @@ test('batch exports verified SVG ZIP, PNG ZIP and PDF sheet files', async ({ pag
 test('full-capacity batch exports 500 verified SVG QR codes', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'Run the expensive full-capacity export once on Chromium.');
   test.setTimeout(8 * 60_000);
-  await page.goto('/batch-qr-code-generator');
+  await openBatchPage(page);
   await page.getByLabel('Dataset').fill(csvRows(500));
   await page.locator('#batch-output').selectOption('svg-zip');
 
