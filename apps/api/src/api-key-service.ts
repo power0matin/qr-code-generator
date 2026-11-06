@@ -18,7 +18,7 @@ export interface IssuedApiKey extends ApiKeyMetadata {
 
 export class LastManagingApiKeyError extends Error {
   constructor() {
-    super('The last active keys:manage API key cannot be revoked');
+    super('At least one active keys:manage API key must remain for a tenant');
     this.name = 'LastManagingApiKeyError';
   }
 }
@@ -217,6 +217,18 @@ export async function rotateTenantApiKey(
     if (!previous || previous.revokedAt !== null) return null;
     if (previous.expiresAt !== null && previous.expiresAt.getTime() <= Date.now()) return null;
 
+    const nextScopes = replacementScopes ?? previous.scopes;
+    if (previous.scopes.includes('keys:manage') && !nextScopes.includes('keys:manage')) {
+      const otherManagers = await transaction.unsafe(
+        "SELECT id FROM moduqr.api_keys " +
+        "WHERE tenant_id = $1::uuid AND id <> $2::uuid " +
+        "AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now()) " +
+        "AND scopes @> ARRAY['keys:manage']::text[] LIMIT 1",
+        [tenantId, keyId],
+      );
+      if (otherManagers.length === 0) throw new LastManagingApiKeyError();
+    }
+
     const revoked = await transaction.unsafe(
       'UPDATE moduqr.api_keys SET revoked_at = now() ' +
       'WHERE id = $1::uuid AND tenant_id = $2::uuid AND revoked_at IS NULL RETURNING id',
@@ -234,7 +246,7 @@ export async function rotateTenantApiKey(
       'VALUES ($1::uuid, $2::uuid, $3, $4, $5::text[], $6) ' +
       'RETURNING id::text AS id, prefix, scopes, created_at AS "createdAt", ' +
       'expires_at AS "expiresAt", last_used_at AS "lastUsedAt", revoked_at AS "revokedAt"',
-      [newKeyId, tenantId, material.prefix, material.secretHash, [...(replacementScopes ?? previous.scopes)], replacementExpiry],
+      [newKeyId, tenantId, material.prefix, material.secretHash, [...nextScopes], replacementExpiry],
     ) as KeyRow[];
 
     const row = rows[0];
