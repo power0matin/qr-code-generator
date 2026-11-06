@@ -141,6 +141,20 @@ describe('Phase 3B tenant API-key security', () => {
     expect(restrictedKey.token).toMatch(/^mqk_live_/);
     expect(restrictedKey.scopes).toEqual(['links:read']);
 
+    const lastOwnerRevoke = await apiRequest('/v1/api-keys/' + bootstrap.apiKey.id, {
+      method: 'DELETE',
+      token: bootstrap.apiKey.token,
+    });
+    expect(lastOwnerRevoke.status).toBe(409);
+    expect((await responseJson(lastOwnerRevoke)).error).toMatchObject({ code: 'last_managing_key' });
+
+    const lastOwnerDowngrade = await apiRequest('/v1/api-keys/' + bootstrap.apiKey.id + '/rotate', {
+      method: 'POST',
+      token: bootstrap.apiKey.token,
+      body: { scopes: ['links:read'] },
+    });
+    expect(lastOwnerDowngrade.status).toBe(409);
+
     const tenantSpoof = await apiRequest('/v1/api-keys', {
       method: 'POST',
       token: bootstrap.apiKey.token,
@@ -158,6 +172,12 @@ describe('Phase 3B tenant API-key security', () => {
 
     const restrictedList = await apiRequest('/v1/api-keys', { token: restrictedKey.token });
     expect(restrictedList.status).toBe(403);
+
+    const secondarySelfRevoke = await apiRequest('/v1/api-keys/' + secondaryKey.id, {
+      method: 'DELETE',
+      token: secondaryKey.token,
+    });
+    expect(secondarySelfRevoke.status).toBe(409);
 
     const secondaryList = await apiRequest('/v1/api-keys', { token: secondaryKey.token });
     expect(secondaryList.status).toBe(200);
