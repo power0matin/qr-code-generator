@@ -10,38 +10,43 @@ async function readPackage(relativePath) {
   return { relativePath, packageJson };
 }
 
+async function listWorkspaceDirectories(relativePath) {
+  return (await readdir(path.join(repositoryRoot, relativePath), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => relativePath + '/' + entry.name);
+}
+
 const rootEntry = await readPackage('.');
 const packageVersion = rootEntry.packageJson.version;
-const tag = process.argv[2] ?? (process.env['GITHUB_REF_TYPE'] === 'tag' ? process.env['GITHUB_REF_NAME'] : undefined) ?? (typeof packageVersion === 'string' ? `v${packageVersion}` : undefined);
+const tag = process.argv[2] ?? (process.env['GITHUB_REF_TYPE'] === 'tag' ? process.env['GITHUB_REF_NAME'] : undefined) ?? (typeof packageVersion === 'string' ? 'v' + packageVersion : undefined);
 
 if (typeof packageVersion !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(packageVersion)) {
-  throw new Error(`Invalid root package version: ${String(packageVersion)}`);
+  throw new Error('Invalid root package version: ' + String(packageVersion));
 }
 
-const packageDirectories = (await readdir(path.join(repositoryRoot, 'packages'), { withFileTypes: true }))
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => `packages/${entry.name}`)
-  .sort();
-const workspaceEntries = await Promise.all(['apps/web', ...packageDirectories].map(readPackage));
+const workspaceDirectories = [
+  ...(await listWorkspaceDirectories('apps')),
+  ...(await listWorkspaceDirectories('packages')),
+].sort();
+const workspaceEntries = await Promise.all(workspaceDirectories.map(readPackage));
 const mismatches = workspaceEntries.filter(({ packageJson }) => packageJson.version !== packageVersion);
+
 if (mismatches.length > 0) {
-  const details = mismatches.map(({ relativePath, packageJson }) => `${relativePath}: ${String(packageJson.version)}`).join(', ');
-  throw new Error(`Workspace package versions must match the root version ${packageVersion}. Mismatches: ${details}`);
+  const details = mismatches.map(({ relativePath, packageJson }) => relativePath + ': ' + String(packageJson.version)).join(', ');
+  throw new Error('Workspace package versions must match the root version ' + packageVersion + '. Mismatches: ' + details);
 }
 
-if (!tag) {
-  throw new Error('Release tag is missing. Pass it as an argument or set GITHUB_REF_NAME.');
-}
+if (!tag) throw new Error('Release tag is missing. Pass it as an argument or set GITHUB_REF_NAME.');
 
-const expectedTag = `v${packageVersion}`;
+const expectedTag = 'v' + packageVersion;
 if (tag !== expectedTag) {
-  throw new Error(`Release tag ${tag} does not match root package version ${packageVersion}. Expected ${expectedTag}.`);
+  throw new Error('Release tag ' + tag + ' does not match root package version ' + packageVersion + '. Expected ' + expectedTag + '.');
 }
 
-const releaseNotesPath = path.join(repositoryRoot, 'docs', 'releases', `${expectedTag}.md`);
+const releaseNotesPath = path.join(repositoryRoot, 'docs', 'releases', expectedTag + '.md');
 const releaseNotes = await readFile(releaseNotesPath, 'utf8');
-if (!releaseNotes.startsWith(`# ModuQR ${expectedTag}`) || !releaseNotes.includes('## Validation')) {
-  throw new Error(`Release notes for ${expectedTag} are missing the expected title or validation section: ${releaseNotesPath}`);
+if (!releaseNotes.startsWith('# ModuQR ' + expectedTag) || !releaseNotes.includes('## Validation')) {
+  throw new Error('Release notes for ' + expectedTag + ' are missing the expected title or validation section: ' + releaseNotesPath);
 }
 
-process.stdout.write(`Release tag, ${workspaceEntries.length + 1} workspace package versions and release notes verified: ${tag}\n`);
+process.stdout.write('Release tag, ' + (workspaceEntries.length + 1) + ' workspace package versions and release notes verified: ' + tag + '\n');

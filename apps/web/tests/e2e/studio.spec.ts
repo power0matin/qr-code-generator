@@ -45,14 +45,20 @@ test('Phase 1 payload types produce decodable previews', async ({ page }) => {
 test('smart input canonicalizes a detected email into an email QR payload', async ({ page }, testInfo) => {
   const file = path.join(testInfo.outputDir, 'smart-email-export.png');
   await page.goto('/generator');
+  // The QR decoder runs after hydration; wait for this client-side readiness signal
+  // before filling a controlled input on slower mobile WebKit devices.
+  await expectDecodable(page);
 
   const initialQr = await qrMarkup(page);
+  const smartInput = page.getByLabel('Smart input');
+  await expect(smartInput).toBeVisible();
+  await smartInput.fill('hello@example.com');
+  await expect(smartInput).toHaveValue('hello@example.com');
 
-  await page.getByLabel('Smart input').fill('hello@example.com');
   await page.getByRole('button', { name: 'Detect & use' }).click();
-  await expect(page.getByText('Email address detected.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Email', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByLabel('Email', { exact: true })).toHaveValue('hello@example.com');
+  await expect(page.getByText('Email address detected.')).toBeVisible();
   await expectQrToChange(page, initialQr);
   await expectDecodable(page);
 
