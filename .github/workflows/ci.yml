@@ -74,7 +74,11 @@ jobs:
       - name: Build the production API container
         run: docker build --file apps/api/Dockerfile --tag moduqr-api:ci .
       - name: Smoke-test the runtime module loader
-        run: docker run --rm --entrypoint node moduqr-api:ci -e "import('./dist/server.js').then(() => process.stdout.write('api-module-load-ok\\n'))"
+        run: docker run --rm --entrypoint node moduqr-api:ci -e "import('file:///app/dist/server.js').then(() => process.stdout.write('api-module-load-ok\\n'))"
+      - name: Validate the optional API Compose configuration
+        run: |
+          printf 'POSTGRES_PASSWORD=ci-local-only-password\\n' > .env.api
+          docker compose --env-file .env.api -f compose.api.yaml config --quiet
 
   e2e:
     runs-on: ubuntu-latest
