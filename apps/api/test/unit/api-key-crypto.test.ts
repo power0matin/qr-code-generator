@@ -31,7 +31,7 @@ describe('API key token security', () => {
     expect(parseApiKeyToken('')).toBeNull();
     expect(parseApiKeyToken('mqk_live_short.short')).toBeNull();
     expect(parseApiKeyToken('mqk_live_!!!!!!!!!!!!.' + 'A'.repeat(43))).toBeNull();
-    expect(parseApiKeyToken('mqk_live_' + 'A'.repeat(12) + '.' + 'A'.repeat(43))).toBeNull();
+    expect(parseApiKeyToken('mqk_live_' + 'A'.repeat(12) + '.' + 'A'.repeat(42) + 'B')).toBeNull();
     expect(verifyApiKeySecret('secret', 'not-a-hash')).toBe(false);
   });
 
