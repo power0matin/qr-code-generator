@@ -72,7 +72,7 @@ Readiness returns 503 when PostgreSQL is unavailable, authentication fails, `psq
 
 API keys use the format `mqk_live_<prefix>.<secret>`. The prefix is a lookup identifier; the 256-bit random secret is the credential. Each request must send the key in the `Authorization: Bearer` header. Query-string and body-based credentials are not accepted.
 
-The database stores the prefix, SHA-256 secret digest, tenant ID, scopes, created/expiry/last-used/revocation timestamps. It never stores the raw token. Authentication performs a constant-time digest comparison, checks tenant status and expiry, and updates last-use metadata at most once per minute.
+The database stores the prefix, SHA-256 secret digest, tenant ID, scopes, created/expiry/last-used/revocation timestamps. It never stores the raw token. Treat `keys:manage` as tenant-administrator privilege: it can issue any supported scope and manage all keys within that tenant. The API prevents revoking or downgrading the last active `keys:manage` key; rotate it to a replacement that retains that scope instead. Authentication performs a constant-time digest comparison, checks tenant status and expiry, and updates last-use metadata at most once per minute.
 
 Supported scopes:
 
