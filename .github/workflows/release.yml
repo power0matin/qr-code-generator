@@ -100,7 +100,7 @@ jobs:
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag --annotate "$tag" "$GITHUB_SHA" --message "ModuQR $tag"
+            git tag --annotate --message "ModuQR $tag" "$tag" "$GITHUB_SHA"
             git push origin "refs/tags/$tag"
           fi
 
