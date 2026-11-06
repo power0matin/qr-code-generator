@@ -40,8 +40,9 @@ export function startServer(): void {
   let shuttingDown = false;
   const shutdown = (signal: NodeJS.Signals): void => {
     if (shuttingDown) return;
+    const receivedSignal: 'SIGINT' | 'SIGTERM' = signal === 'SIGINT' ? 'SIGINT' : 'SIGTERM';
     shuttingDown = true;
-    writeLog('info', 'server_shutdown_started', { signal });
+    writeLog('info', 'server_shutdown_started', { signal: receivedSignal });
 
     const forceClose = setTimeout(() => {
       server.closeAllConnections();
@@ -58,7 +59,7 @@ export function startServer(): void {
         process.exitCode = 1;
         return;
       }
-      writeLog('info', 'server_shutdown_complete', { signal });
+      writeLog('info', 'server_shutdown_complete', { signal: receivedSignal });
     });
   };
 
