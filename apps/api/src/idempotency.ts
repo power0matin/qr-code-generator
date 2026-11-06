@@ -31,8 +31,8 @@ export async function reserveIdempotencyRecord(
   return database.begin(async (transaction) => {
     await transaction.unsafe(
       'DELETE FROM moduqr.idempotency_records ' +
-      'WHERE tenant_id = $1::uuid AND idempotency_key = $2 AND expires_at <= now()',
-      [tenantId, idempotencyKey],
+      'WHERE tenant_id = $1::uuid AND expires_at <= now()',
+      [tenantId],
     );
 
     const inserted = await transaction.unsafe(
