@@ -5,11 +5,12 @@
 
 <!-- repo-badges:start -->
 <p align="center">
-  <a href="https://hits.sh/github.com/power0matin/qr-code-generator/"><img src="https://hits.sh/github.com/power0matin/qr-code-generator.svg?style=flat-square&amp;label=Views&amp;labelColor=18181B&amp;color=0EA5E9&amp;logo=github" alt="Repository Views"/></a>
+  <a href="https://github.com/power0matin/qr-code-generator/actions/workflows/ci.yml"><img src="https://github.com/power0matin/qr-code-generator/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"/></a>
+  <a href="https://github.com/power0matin/qr-code-generator/releases/latest"><img src="https://img.shields.io/github/v/release/power0matin/qr-code-generator?style=flat-square&amp;label=Latest%20release&amp;labelColor=18181B&amp;color=0EA5E9" alt="Latest Release"/></a>
   <a href="https://github.com/power0matin/qr-code-generator/stargazers"><img src="https://img.shields.io/github/stars/power0matin/qr-code-generator?style=flat-square&amp;label=Stars&amp;labelColor=18181B&amp;color=F59E0B&amp;logo=github&amp;logoColor=white" alt="GitHub Stars"/></a>
   <a href="https://github.com/power0matin/qr-code-generator/forks"><img src="https://img.shields.io/github/forks/power0matin/qr-code-generator?style=flat-square&amp;label=Forks&amp;labelColor=18181B&amp;color=6366F1&amp;logo=github&amp;logoColor=white" alt="GitHub Forks"/></a>
   <a href="https://github.com/power0matin/qr-code-generator/issues"><img src="https://img.shields.io/github/issues/power0matin/qr-code-generator?style=flat-square&amp;label=Issues&amp;labelColor=18181B&amp;color=22C55E&amp;logo=github&amp;logoColor=white" alt="GitHub Issues"/></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/power0matin/qr-code-generator?style=flat-square&amp;label=License&amp;labelColor=18181B&amp;color=EF4444&amp;logo=github&amp;logoColor=white" alt="GitHub License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/power0matin/qr-code-generator?style=flat-square&amp;label=License&amp;labelColor=18181B&amp;color=EF4444" alt="MIT License"/></a>
 </p>
 <!-- repo-badges:end -->
 
@@ -18,14 +19,15 @@
 A privacy-first, SVG-native QR studio with explainable scan-safety checks.
 
 ![Status](https://img.shields.io/badge/status-pre--1.0-5b4cf0)
-![License](https://img.shields.io/badge/license-MIT-111318)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
-![Privacy](https://img.shields.io/badge/static%20payloads-local-0c7a52)
+![Static privacy](https://img.shields.io/badge/static%20payloads-local-0c7a52)
+![Node.js](https://img.shields.io/badge/Node.js-22.14%2B-339933)
+![pnpm](https://img.shields.io/badge/pnpm-10.15.0-F69220)
 
-[Designer](#designer) · [Scan safety](#scan-safety) · [Architecture](docs/architecture/README.md) · [Testing](docs/TESTING.md) · [Versioning](docs/VERSIONING.md) · [Roadmap](ROADMAP.md) · [فارسی](docs/fa/README.md)
+[Designer](#designer) · [Scan safety](#scan-safety) · [Architecture](docs/architecture/README.md) · [Deploy](docs/DEPLOYMENT.md) · [Testing](docs/TESTING.md) · [Versioning](docs/VERSIONING.md) · [Roadmap](ROADMAP.md) · [فارسی](docs/fa/README.md)
 </div>
 
-*Release status:* pre-1.0 development. The repository version is currently `0.1.0`; the first public tag will be `v0.1.0` only after the clean-install CI, browser matrix, accessibility, dependency-audit and production-build gates pass.
+*Latest release:* [`v0.1.0`](https://github.com/power0matin/qr-code-generator/releases/tag/v0.1.0), the first public pre-1.0 release of ModuQR’s static web app. Dynamic redirects, server analytics and the API platform are not part of this release; they remain on the Phase 3 roadmap.
 
 ## Why ModuQR?
 
@@ -167,18 +169,6 @@ MIT. “QR Code” is a registered trademark of DENSO WAVE INCORPORATED.
   <b>If this helped you, consider giving it a star!</b><br>
   <sub>Your support keeps the project alive and helps others find it.</sub>
 </p>
-
-<!-- Copy-paste in your Readme.md file -->
-<p align="center">
-  <a href="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history?repo_id=1353473696" target="_blank" style="display: block" align="center">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history/thumbnail.png?repo_id=1353473696&amp;image_size=auto&amp;color_scheme=dark" width="721" height="auto">
-      <img alt="Star History of power0matin/qr-code-generator" src="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history/thumbnail.png?repo_id=1353473696&amp;image_size=auto&amp;color_scheme=light" width="721" height="auto">
-    </picture>
-  </a>
-</p>
-
-<!-- Made with [OSS Insight](https://ossinsight.io/) -->
 
 <p align="center">
   Created by <a href="https://github.com/power0matin">power0matin</a>
