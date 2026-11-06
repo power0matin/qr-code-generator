@@ -88,7 +88,7 @@ describe('PostgreSQL API foundation', () => {
     );
     expect(query.error).toBeUndefined();
     expect(query.status).toBe(0);
-    expect(query.stdout.trim()).toBe('1|1');
+    expect(query.stdout.trim()).toBe('2|2');
 
     const server = createHealthServer({
       probeDatabase: createDatabaseProbe(parseDatabaseUrl(databaseUrl)),
