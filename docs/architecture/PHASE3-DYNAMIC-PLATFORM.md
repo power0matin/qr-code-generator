@@ -1,6 +1,6 @@
 # Phase 3 — Dynamic & Developer Platform
 
-**Status:** Architecture proposal. No server feature is shipped by this document.
+**Status:** Architecture and delivery plan. Static QR Studio v0.1.0 and the Phase 3A API/PostgreSQL foundation are shipped. Phase 3B tenant and API-key security is under implementation.
 
 Phase 3 adds an optional hosted/self-hosted dynamic-link platform. It must not change the privacy, availability, or deployment requirements of the existing static QR Studio.
 
