@@ -38,9 +38,8 @@ export function startServer(): void {
   });
 
   let shuttingDown = false;
-  const shutdown = (signal: NodeJS.Signals): void => {
+  const shutdown = (signal: 'SIGINT' | 'SIGTERM'): void => {
     if (shuttingDown) return;
-    const receivedSignal: 'SIGINT' | 'SIGTERM' = signal === 'SIGINT' ? 'SIGINT' : 'SIGTERM';
     shuttingDown = true;
     writeLog('info', 'server_shutdown_started', { signal: receivedSignal });
 
@@ -63,8 +62,8 @@ export function startServer(): void {
     });
   };
 
-  process.once('SIGINT', shutdown);
-  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', () => shutdown('SIGINT'));
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 const entryPath = process.argv[1];
