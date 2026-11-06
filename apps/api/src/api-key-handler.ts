@@ -8,6 +8,7 @@ import {
 import { consumeApiKeyRateLimit } from './api-rate-limit.js';
 import {
   createTenantApiKey,
+  LastManagingApiKeyError,
   listTenantApiKeys,
   revokeTenantApiKey,
   rotateTenantApiKey,
@@ -224,7 +225,18 @@ export async function handleApiKeyRequest(
       return;
     }
 
-    const issued = await rotateTenantApiKey(database, identity.tenantId, keyId, parsedScopes ?? undefined, expiresAt);
+    let issued;
+    try {
+      issued = await rotateTenantApiKey(database, identity.tenantId, keyId, parsedScopes ?? undefined, expiresAt);
+    } catch (error) {
+      if (error instanceof LastManagingApiKeyError) {
+        sendJson(response, 409, {
+          error: { code: 'last_managing_key', message: 'A tenant must retain an active keys:manage API key' },
+        }, requestId);
+        return;
+      }
+      throw error;
+    }
     if (!issued) {
       sendJson(response, 404, { error: { code: 'not_found', message: 'API key not found' } }, requestId);
       return;
@@ -234,7 +246,18 @@ export async function handleApiKeyRequest(
   }
 
   if (keyId && !rotate && method === 'DELETE') {
-    const revoked = await revokeTenantApiKey(database, identity.tenantId, keyId);
+    let revoked: boolean;
+    try {
+      revoked = await revokeTenantApiKey(database, identity.tenantId, keyId);
+    } catch (error) {
+      if (error instanceof LastManagingApiKeyError) {
+        sendJson(response, 409, {
+          error: { code: 'last_managing_key', message: 'A tenant must retain an active keys:manage API key' },
+        }, requestId);
+        return;
+      }
+      throw error;
+    }
     if (!revoked) {
       sendJson(response, 404, { error: { code: 'not_found', message: 'API key not found' } }, requestId);
       return;
