@@ -80,6 +80,10 @@ export function parseApiKeyScopes(value: unknown): ApiKeyScope[] | null {
   return [...value].sort() as ApiKeyScope[];
 }
 
+export function hasApiKeyScope(granted: readonly ApiKeyScope[], required: ApiKeyScope): boolean {
+  return granted.includes(required);
+}
+
 export function parseApiKeyExpiry(value: unknown, now = new Date()): Date | null | undefined {
   if (value === undefined) return new Date(now.getTime() + 90 * 24 * 60 * 60 * 1_000);
   if (value === null) return null;
