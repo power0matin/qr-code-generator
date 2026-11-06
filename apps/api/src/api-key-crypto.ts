@@ -83,7 +83,11 @@ export function parseApiKeyScopes(value: unknown): ApiKeyScope[] | null {
 export function parseApiKeyExpiry(value: unknown, now = new Date()): Date | null | undefined {
   if (value === undefined) return new Date(now.getTime() + 90 * 24 * 60 * 60 * 1_000);
   if (value === null) return null;
-  if (typeof value !== 'string' || value.length > 40) return undefined;
+  if (
+    typeof value !== 'string' ||
+    value.length > 40 ||
+    !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(value)
+  ) return undefined;
 
   const expiresAt = new Date(value);
   if (Number.isNaN(expiresAt.getTime())) return undefined;
