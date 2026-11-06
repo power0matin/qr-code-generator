@@ -54,8 +54,8 @@ async function apiRequest(
   });
 }
 
-async function responseJson(response: Response): Promise<Record<string, any>> {
-  return await response.json() as Record<string, any>;
+async function responseJson(response: Response): Promise<Record<string, unknown>> {
+  return await response.json() as Record<string, unknown>;
 }
 
 beforeAll(async () => {
@@ -123,10 +123,11 @@ describe('Phase 3B tenant API-key security', () => {
     expect(firstList.headers.get('cache-control')).toBe('no-store');
     expect(firstList.headers.get('ratelimit-limit')).toBe('60');
     const firstListBody = await responseJson(firstList);
-    expect(firstListBody.data).toHaveLength(1);
-    expect(firstListBody.data[0].id).toBe(bootstrap.apiKey.id);
-    expect(firstListBody.data[0]).not.toHaveProperty('token');
-    expect(firstListBody.data[0]).not.toHaveProperty('secretHash');
+    const firstListData = firstListBody['data'] as Array<Record<string, unknown>>;
+    expect(firstListData).toHaveLength(1);
+    expect(firstListData[0]?.['id']).toBe(bootstrap.apiKey.id);
+    expect(firstListData[0]).not.toHaveProperty('token');
+    expect(firstListData[0]).not.toHaveProperty('secretHash');
 
     const restrictedCreate = await apiRequest('/v1/api-keys', {
       method: 'POST',
@@ -135,7 +136,7 @@ describe('Phase 3B tenant API-key security', () => {
     });
     expect(restrictedCreate.status).toBe(201);
     const restrictedBody = await responseJson(restrictedCreate);
-    const restrictedKey = restrictedBody.data as { id: string; token: string; scopes: string[] };
+    const restrictedKey = restrictedBody['data'] as { id: string; token: string; scopes: string[] };
     expect(restrictedKey.token).toMatch(/^mqk_live_/);
     expect(restrictedKey.scopes).toEqual(['links:read']);
 
@@ -160,9 +161,10 @@ describe('Phase 3B tenant API-key security', () => {
     const secondaryList = await apiRequest('/v1/api-keys', { token: secondaryKey.token });
     expect(secondaryList.status).toBe(200);
     const secondaryBody = await responseJson(secondaryList);
-    expect(secondaryBody.data).toHaveLength(1);
-    expect(secondaryBody.data[0].id).toBe(secondaryKey.id);
-    expect(secondaryBody.data[0].id).not.toBe(bootstrap.apiKey.id);
+    const secondaryData = secondaryBody['data'] as Array<Record<string, unknown>>;
+    expect(secondaryData).toHaveLength(1);
+    expect(secondaryData[0]?.['id']).toBe(secondaryKey.id);
+    expect(secondaryData[0]?.['id']).not.toBe(bootstrap.apiKey.id);
 
     const crossTenantRevoke = await apiRequest('/v1/api-keys/' + secondaryKey.id, {
       method: 'DELETE',
@@ -177,7 +179,7 @@ describe('Phase 3B tenant API-key security', () => {
     });
     expect(rotation.status).toBe(201);
     const rotationBody = await responseJson(rotation);
-    const rotated = rotationBody.data as { id: string; token: string; scopes: string[] };
+    const rotated = rotationBody['data'] as { id: string; token: string; scopes: string[] };
     expect(rotated.token).toMatch(/^mqk_live_/);
     expect(rotated.id).not.toBe(bootstrap.apiKey.id);
     expect(rotated.scopes).toContain('keys:manage');
@@ -255,7 +257,8 @@ describe('Phase 3B tenant API-key security', () => {
     );
     expect(firstReservation.state).toBe('created');
     await database.unsafe(
-      "UPDATE moduqr.idempotency_records SET expires_at = now() - interval '1 second' " +
+      "UPDATE moduqr.idempotency_records SET created_at = now() - interval '2 seconds', " +
+      "expires_at = now() - interval '1 second' " +
       'WHERE tenant_id = $1::uuid AND idempotency_key = $2',
       [bootstrapTenantId, reusableIdempotencyKey],
     );
