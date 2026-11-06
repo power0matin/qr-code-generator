@@ -18,38 +18,56 @@ export async function reserveIdempotencyRecord(
   requestHash: string,
   expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000),
 ): Promise<IdempotencyReservation> {
-  const inserted = await database.unsafe(
-    'INSERT INTO moduqr.idempotency_records ' +
-    '(tenant_id, idempotency_key, operation, request_hash, expires_at) ' +
-    'VALUES ($1::uuid, $2, $3, $4, $5) ' +
-    'ON CONFLICT (tenant_id, idempotency_key) DO NOTHING RETURNING idempotency_key',
-    [tenantId, idempotencyKey, operation, requestHash, expiresAt],
-  );
-  if (inserted.length === 1) return { state: 'created' };
+  if (!/^[A-Za-z0-9._:-]{1,128}$/.test(idempotencyKey)) {
+    throw new Error('Idempotency key is invalid');
+  }
+  if (operation.length < 1 || operation.length > 80) {
+    throw new Error('Idempotency operation is invalid');
+  }
+  if (!/^[a-f0-9]{64}$/.test(requestHash)) {
+    throw new Error('Idempotency request hash is invalid');
+  }
 
-  const existing = await database.unsafe(
-    'SELECT request_hash AS "requestHash", operation, response_status AS "responseStatus", ' +
-    'response_metadata AS "responseMetadata", expires_at AS "expiresAt" ' +
-    'FROM moduqr.idempotency_records ' +
-    'WHERE tenant_id = $1::uuid AND idempotency_key = $2',
-    [tenantId, idempotencyKey],
-  ) as Array<{
-    requestHash: string;
-    operation: string;
-    responseStatus: number | null;
-    responseMetadata: Record<string, unknown>;
-    expiresAt: Date;
-  }>;
+  return database.begin(async (transaction) => {
+    await transaction.unsafe(
+      'DELETE FROM moduqr.idempotency_records ' +
+      'WHERE tenant_id = $1::uuid AND idempotency_key = $2 AND expires_at <= now()',
+      [tenantId, idempotencyKey],
+    );
 
-  const record = existing[0];
-  if (!record || record.expiresAt.getTime() <= Date.now()) return { state: 'conflict' };
-  if (record.requestHash !== requestHash || record.operation !== operation) return { state: 'conflict' };
+    const inserted = await transaction.unsafe(
+      'INSERT INTO moduqr.idempotency_records ' +
+      '(tenant_id, idempotency_key, operation, request_hash, expires_at) ' +
+      'VALUES ($1::uuid, $2, $3, $4, $5) ' +
+      'ON CONFLICT (tenant_id, idempotency_key) DO NOTHING RETURNING idempotency_key',
+      [tenantId, idempotencyKey, operation, requestHash, expiresAt],
+    );
+    if (inserted.length === 1) return { state: 'created' };
 
-  return {
-    state: 'replay',
-    responseStatus: record.responseStatus,
-    responseMetadata: record.responseMetadata,
-  };
+    const existing = await transaction.unsafe(
+      'SELECT request_hash AS "requestHash", operation, response_status AS "responseStatus", ' +
+      'response_metadata AS "responseMetadata", expires_at AS "expiresAt" ' +
+      'FROM moduqr.idempotency_records ' +
+      'WHERE tenant_id = $1::uuid AND idempotency_key = $2 FOR UPDATE',
+      [tenantId, idempotencyKey],
+    ) as Array<{
+      requestHash: string;
+      operation: string;
+      responseStatus: number | null;
+      responseMetadata: Record<string, unknown>;
+      expiresAt: Date;
+    }>;
+
+    const record = existing[0];
+    if (!record || record.expiresAt.getTime() <= Date.now()) return { state: 'conflict' };
+    if (record.requestHash !== requestHash || record.operation !== operation) return { state: 'conflict' };
+
+    return {
+      state: 'replay',
+      responseStatus: record.responseStatus,
+      responseMetadata: record.responseMetadata,
+    };
+  });
 }
 
 export async function completeIdempotencyRecord(
