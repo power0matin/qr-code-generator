@@ -31,9 +31,20 @@ Phase 3A was merged in [PR #18](https://github.com/power0matin/qr-code-generator
 
 Phase 3A is an optional server foundation only. It does not ship tenant authentication, API keys, dynamic link CRUD, public redirects, analytics, a management UI, or a production deployment; those remain subsequent phases.
 
-### Phase 3B — Tenant and API-key security — Next
+### Phase 3B — Tenant and API-key security — Implementation in progress
 
-Bootstrap tenant ownership, cryptographically random API keys, hash-only secret storage, scopes, expiry, rotation, revocation, rate limits, tenant isolation and idempotency records.
+The Phase 3B branch adds the security foundation without implementing dynamic links:
+
+- One-time bootstrap command for the initial tenant; no public signup endpoint.
+- High-entropy API key secrets with hash-only persistence and strict Bearer parsing.
+- Explicit scopes, bounded expiry, key listing, atomic rotation and revocation.
+- Tenant-scoped management queries and fixed-window per-key rate limiting.
+- Tenant-scoped idempotency reservations bound to operation and request hash.
+- Real PostgreSQL integration tests for tenant isolation, key lifecycle, replay conflicts and rate-limit behavior.
+
+The management surface is limited to `/v1/api-keys`. Key creation/rotation secrets are returned once and are never replayed or stored in idempotency metadata. Expired idempotency records are pruned before new reservations for the same tenant.
+
+Acceptance requires frozen install, lint, typecheck, unit tests, production build, PostgreSQL integration, runtime container load, Compose validation, CodeQL and no static web regression. The current implementation is under review in a dedicated branch; it is not yet merged or deployed.
 
 ### Phase 3C — Dynamic links and redirects
 
