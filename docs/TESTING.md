@@ -50,7 +50,7 @@ After the production app builds, CI runs Chromium, Firefox and WebKit from the o
 
 The matrix covers desktop and mobile viewport profiles with the same E2E suite. The service-worker test registers `/sw.js` explicitly during local development because the application intentionally does not auto-register production caching in `next dev`. Development cleanup runs once per tab, so the test can reload under the manually registered worker without immediately unregistering it again.
 
-CI and release runs also emit Playwright's structured JSON report. `pnpm check:e2e` rejects any unexpected or retry-flaky test even when Playwright exits successfully after a retry; the HTML and JSON diagnostics are retained as workflow artifacts for 14 days. A green job therefore means zero flaky tests, not merely that retries recovered.
+CI and release runs also emit Playwright's structured JSON report. `pnpm check:e2e` requires zero unexpected tests, zero retry-flaky tests and exactly the 8 documented Chromium-only skips (the full-capacity ZIP and offline service-worker tests each run once on desktop Chromium). The HTML and JSON diagnostics are retained as workflow artifacts for 14 days. A green job therefore means zero flaky tests, not merely that retries recovered.
 
 ## QR round trip
 
