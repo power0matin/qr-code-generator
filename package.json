@@ -18,7 +18,8 @@
     "check": "corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build",
     "audit:prod": "corepack pnpm audit --prod --audit-level high",
     "release:verify": "node scripts/verify-release-tag.mjs",
-    "check:bundle": "node scripts/check-bundle-size.mjs"
+    "check:bundle": "node scripts/check-bundle-size.mjs",
+    "check:e2e": "node scripts/check-e2e-report.mjs"
   },
   "license": "MIT",
   "pnpm": {
