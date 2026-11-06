@@ -225,7 +225,7 @@ export async function handleApiKeyRequest(
       return;
     }
 
-    let issued;
+    let issued: Awaited<ReturnType<typeof rotateTenantApiKey>>;
     try {
       issued = await rotateTenantApiKey(database, identity.tenantId, keyId, parsedScopes ?? undefined, expiresAt);
     } catch (error) {
