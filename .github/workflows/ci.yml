@@ -36,10 +36,47 @@ jobs:
       - name: Verify workspace versions and current release metadata
         run: pnpm release:verify
 
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: moduqr_test
+          POSTGRES_USER: moduqr
+          POSTGRES_PASSWORD: integration-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U moduqr -d moduqr_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL client utilities
+        run: sudo apt-get update -qq && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Build the API
+        run: pnpm --filter @moduqr/api build
+      - name: Test migrations and database-backed readiness
+        run: pnpm --filter @moduqr/api test:integration
+        env:
+          DATABASE_URL: postgresql://moduqr:integration-only-password@127.0.0.1:5432/moduqr_test
+      - name: Build the production API container
+        run: docker build --file apps/api/Dockerfile --tag moduqr-api:ci .
+
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Keep this image version aligned with apps/web's @playwright/test version.
     container:
       image: mcr.microsoft.com/playwright:v1.64.1-noble
       options: --user 1001

@@ -65,8 +65,9 @@ Browser
 
 - Add `apps/api` as a separate workspace app. Keep the existing `apps/web` runtime and deployment unchanged.
 - Use the existing TypeScript toolchain and strict compiler settings.
-- Use a small Node HTTP framework (Fastify is the current proposal) rather than Next.js route handlers. Redirect traffic and management API lifecycle should be independently deployable from the marketing/studio UI.
+- Phase 3A uses Node's built-in HTTP server for its deliberately small health-only surface. Introduce Fastify or another framework when the authenticated management contract arrives in Phase 3B/3C and justifies a framework dependency.
 - Use PostgreSQL as the durable source of truth. Keep the first implementation free of a mandatory Redis dependency.
+- The foundation uses PostgreSQL client utilities for bounded readiness queries and explicit migration execution; it adds no third-party runtime npm dependencies.
 - Put SQL migrations under the API app and run them as an explicit release step/one-off container command. Do not run concurrent schema migrations independently from every API replica.
 - Share request/response validation and OpenAPI definitions through a dedicated `packages/api-contracts` package. Do not put server-only persistence or secrets in `packages/shared`.
 - The redirect service must not depend on `@moduqr/core` or `@moduqr/renderer`.
