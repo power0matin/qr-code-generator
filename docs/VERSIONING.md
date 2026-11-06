@@ -2,9 +2,9 @@
 
 ModuQR follows [Semantic Versioning](https://semver.org/) for releases. Product roadmap phases are intentionally independent from version numbers.
 
-## Current baseline
+## Current release
 
-The repository starts at `0.1.0`. The first public Git tag will be `v0.1.0` only after the complete release gate passes. The initial commit may contain `0.1.0` in package manifests without creating a release tag.
+The first public release is `v0.1.0` (2026-11-06). It ships the static QR web application only. The Dynamic server platform, redirects, API and analytics are not included. Root, web app and all workspace package manifests use the same version. Workspace packages are private implementation modules; this release does not publish them to npm.
 
 ## Pre-1.0 releases
 
@@ -34,14 +34,17 @@ This means `1.0.0` may happen before every long-term roadmap idea is implemented
 
 ## Release procedure
 
-For every release:
+Every release is prepared through a pull request:
 
-1. Finish and document the intended scope.
-2. Run the complete release gate from a clean checkout.
-3. Update `CHANGELOG.md`.
-4. Set the root and every workspace package version to the exact release version.
-5. Commit the release metadata.
-6. Create an annotated or signed Git tag named `v<version>`.
-7. Push the tag; GitHub Actions verifies that the tag matches the root version and that every workspace package uses that same version before creating the GitHub Release.
+1. Finish and document the intended scope; keep unreleased roadmap work out of the release.
+2. Set the root, web app and every workspace package to the same exact SemVer version.
+3. Move completed entries from `[Unreleased]` into a dated `CHANGELOG.md` section.
+4. Add curated release notes at `docs/releases/v<version>.md`.
+5. Open and merge the release PR into `main`. The release workflow is triggered by the new release-notes file (or can be rerun manually).
+6. The workflow performs a frozen install, validates every package version and the release-notes file, runs lint, typecheck, unit tests, production build, bundle budget, production dependency audit and the full Playwright matrix.
+7. Only after validation succeeds, the workflow creates an annotated `v<version>` tag at the validated `main` commit, creates a reproducible source archive, writes its SHA-256 checksum and publishes the GitHub Release.
+8. Verify the release page, tag target and downloadable assets.
 
-Never create a tag merely because a roadmap phase number changed.
+The publish job is idempotent for reruns: it reuses an existing tag only when it points to the exact validated commit, and updates the matching release assets instead of silently moving a tag.
+
+Never create a tag merely because a roadmap phase number changed. A roadmap milestone is not a versioning event.

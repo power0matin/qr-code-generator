@@ -12,7 +12,7 @@ async function readPackage(relativePath) {
 
 const rootEntry = await readPackage('.');
 const packageVersion = rootEntry.packageJson.version;
-const tag = process.argv[2] ?? process.env['GITHUB_REF_NAME'];
+const tag = process.argv[2] ?? (process.env['GITHUB_REF_TYPE'] === 'tag' ? process.env['GITHUB_REF_NAME'] : undefined) ?? (typeof packageVersion === 'string' ? `v${packageVersion}` : undefined);
 
 if (typeof packageVersion !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(packageVersion)) {
   throw new Error(`Invalid root package version: ${String(packageVersion)}`);
@@ -38,4 +38,10 @@ if (tag !== expectedTag) {
   throw new Error(`Release tag ${tag} does not match root package version ${packageVersion}. Expected ${expectedTag}.`);
 }
 
-process.stdout.write(`Release tag and ${workspaceEntries.length + 1} workspace package versions verified: ${tag}\n`);
+const releaseNotesPath = path.join(repositoryRoot, 'docs', 'releases', `${expectedTag}.md`);
+const releaseNotes = await readFile(releaseNotesPath, 'utf8');
+if (!releaseNotes.startsWith(`# ModuQR ${expectedTag}`) || !releaseNotes.includes('## Validation')) {
+  throw new Error(`Release notes for ${expectedTag} are missing the expected title or validation section: ${releaseNotesPath}`);
+}
+
+process.stdout.write(`Release tag, ${workspaceEntries.length + 1} workspace package versions and release notes verified: ${tag}\n`);

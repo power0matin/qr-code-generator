@@ -50,6 +50,8 @@ After the production app builds, CI runs Chromium, Firefox and WebKit from the o
 
 The matrix covers desktop and mobile viewport profiles with the same E2E suite. The service-worker test registers `/sw.js` explicitly during local development because the application intentionally does not auto-register production caching in `next dev`. Development cleanup runs once per tab, so the test can reload under the manually registered worker without immediately unregistering it again.
 
+CI and release runs also emit Playwright's structured JSON report. `pnpm check:e2e` requires zero unexpected tests, zero retry-flaky tests and exactly the 8 documented Chromium-only skips (the full-capacity ZIP and offline service-worker tests each run once on desktop Chromium). The HTML and JSON diagnostics are retained as workflow artifacts for 14 days. A green job therefore means zero flaky tests, not merely that retries recovered.
+
 ## QR round trip
 
 The critical browser tests capture output produced by the ModuQR renderer, feed the resulting image to the local decoder, and check that the exact payload survives the round trip. Regression tests also cover logos, gradients, neighbour-aware modules, independent finder overrides and all shipped presets. Batch acceptance covers the 500-row Worker preparation boundary, rejects row 501, verifies all 500 SVG ZIP entries in a full-capacity browser export, and exercises PNG ZIP/PDF export with raster decode checks.

@@ -2,15 +2,28 @@ name: Release
 
 on:
   push:
-    tags: ['v*.*.*']
+    branches: [main]
+    paths:
+      - 'docs/releases/v*.md'
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  verify-and-release:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    # Keep this image aligned with apps/web's exact @playwright/test version.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --user 1001
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -21,14 +34,87 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Verify tag matches package version
-        run: pnpm release:verify
-      - run: pnpm check
-      - run: pnpm check:bundle
-      - run: pnpm audit:prod
-      - run: pnpm --filter @moduqr/web exec playwright install --with-deps chromium firefox webkit
-      - run: pnpm --filter @moduqr/web test:e2e
-      - name: Create GitHub release
+      - name: Determine release version
+        id: metadata
+        run: |
+          version="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version)')"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+      - name: Verify versions, tag and curated release notes
+        run: pnpm release:verify "${{ steps.metadata.outputs.tag }}"
+      - name: Run lint, typecheck, unit tests and production build
+        run: pnpm check
+      - name: Enforce production bundle budgets
+        run: pnpm check:bundle
+      - name: Audit production dependencies
+        run: pnpm audit:prod
+      - name: Run the complete managed-browser E2E matrix
+        run: pnpm --filter @moduqr/web test:e2e
+        env:
+          CI: 'true'
+      - name: Reject retry-flaky or unexpected browser tests
+        run: pnpm check:e2e
+      - name: Upload release browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-playwright-report-${{ github.run_id }}
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Create or verify the annotated release tag
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+          RELEASE_TAG: ${{ needs.verify.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          tag="$RELEASE_TAG"
+          notes_file="docs/releases/${tag}.md"
+          if [[ ! -s "$notes_file" ]]; then
+            echo "::error::Missing curated release notes: $notes_file"
+            exit 1
+          fi
+
+          remote_tag="$(git ls-remote --tags origin "refs/tags/${tag}")"
+          if [[ -n "$remote_tag" ]]; then
+            git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"
+            existing_commit="$(git rev-parse "${tag}^{commit}")"
+            if [[ "$existing_commit" != "$GITHUB_SHA" ]]; then
+              echo "::error::Tag $tag already points to $existing_commit, not validated commit $GITHUB_SHA."
+              exit 1
+            fi
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag --annotate --message "ModuQR $tag" "$tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$tag"
+          fi
+
+          source_archive="moduqr-${tag}-source.tar.gz"
+          checksum_file="${source_archive}.sha256"
+          git archive --format=tar --prefix="moduqr-${tag}/" "$tag" | gzip -n > "$source_archive"
+          sha256sum "$source_archive" > "$checksum_file"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "ModuQR $tag" --notes-file "$notes_file"
+            gh release upload "$tag" "$source_archive" "$checksum_file" --clobber
+          else
+            gh release create "$tag" "$source_archive" "$checksum_file" \
+              --title "ModuQR $tag" \
+              --notes-file "$notes_file" \
+              --verify-tag
+          fi
