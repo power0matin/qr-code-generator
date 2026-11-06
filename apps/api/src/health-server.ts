@@ -1,11 +1,11 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseProbe } from './database.js';
-import { writeLog, type LogFields, type LogLevel } from './logger.js';
+import { writeLog, type LogEvent, type LogFields, type LogLevel } from './logger.js';
 
 export type HealthLogger = (
   level: LogLevel,
-  event: string,
+  event: LogEvent,
   fields?: LogFields,
 ) => void;
 
