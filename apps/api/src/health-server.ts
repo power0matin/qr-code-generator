@@ -58,6 +58,12 @@ export function createHealthServer(options: HealthServerOptions): Server {
       const startedAt = Date.now();
       const requestId = getRequestId(request);
       const method = request.method ?? 'UNKNOWN';
+      const logMethod: NonNullable<LogFields['method']> =
+        method === 'GET' || method === 'HEAD' || method === 'POST' ||
+        method === 'PUT' || method === 'PATCH' || method === 'DELETE' ||
+        method === 'OPTIONS'
+          ? method
+          : method === 'UNKNOWN' ? 'UNKNOWN' : 'OTHER';
       const route = getRoute(request);
       let statusCode = 200;
 
@@ -103,7 +109,7 @@ export function createHealthServer(options: HealthServerOptions): Server {
       log('info', 'http_request', {
         requestId,
         route,
-        method,
+        method: logMethod,
         statusCode,
         durationMs: Math.max(0, Date.now() - startedAt),
       });
