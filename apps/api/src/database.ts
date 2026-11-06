@@ -17,16 +17,21 @@ export function createDatabaseProbe(
 
       let output = '';
       let settled = false;
-      let timeout: NodeJS.Timeout | undefined;
+      let child: ReturnType<typeof spawn> | undefined;
 
       const finish = (available: boolean): void => {
         if (settled) return;
         settled = true;
-        if (timeout) clearTimeout(timeout);
+        clearTimeout(timeout);
         resolve(available);
       };
 
-      let child: ReturnType<typeof spawn>;
+      const timeout = setTimeout(() => {
+        child?.kill('SIGKILL');
+        finish(false);
+      }, timeoutMs);
+      timeout.unref();
+
       try {
         child = spawn(
           'psql',
@@ -41,12 +46,6 @@ export function createDatabaseProbe(
         finish(false);
         return;
       }
-
-      timeout = setTimeout(() => {
-        child.kill('SIGKILL');
-        finish(false);
-      }, timeoutMs);
-      timeout.unref();
 
       child.stdout?.setEncoding('utf8');
       child.stdout?.on('data', (chunk: string) => {
