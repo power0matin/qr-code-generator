@@ -55,6 +55,12 @@ describe('PostgreSQL API foundation', () => {
     );
     expect(tamper.error).toBeUndefined();
     expect(tamper.status).toBe(0);
+    const tamperedChecksum = runPsql(
+      "SELECT checksum = repeat('0', 64) FROM moduqr.schema_migrations WHERE version = '0001_initial_platform'",
+    );
+    expect(tamperedChecksum.error).toBeUndefined();
+    expect(tamperedChecksum.status).toBe(0);
+    expect(tamperedChecksum.stdout.trim()).toBe('t');
 
     const tamperedReplay = spawnSync(process.execPath, [migrationEntry], {
       env: childEnvironment,
@@ -70,6 +76,12 @@ describe('PostgreSQL API foundation', () => {
     );
     expect(restore.error).toBeUndefined();
     expect(restore.status).toBe(0);
+    const restoredChecksum = runPsql(
+      "SELECT checksum = '" + migrationChecksum + "' FROM moduqr.schema_migrations WHERE version = '0001_initial_platform'",
+    );
+    expect(restoredChecksum.error).toBeUndefined();
+    expect(restoredChecksum.status).toBe(0);
+    expect(restoredChecksum.stdout.trim()).toBe('t');
 
     const query = runPsql(
       "SELECT (SELECT schema_version FROM moduqr.instance_metadata WHERE singleton = true)::text || '|' || (SELECT count(*) FROM moduqr.schema_migrations)::text",
