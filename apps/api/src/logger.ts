@@ -20,6 +20,7 @@ export interface LogFields {
   readonly method?: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | 'OTHER' | 'UNKNOWN';
   readonly statusCode?: number;
   readonly durationMs?: number;
+  readonly host?: string;
   readonly port?: number;
   readonly signal?: 'SIGINT' | 'SIGTERM';
   readonly migration?: string;
@@ -46,6 +47,9 @@ function sanitizeFields(fields: LogFields): Readonly<Record<string, string | num
   }
   if (Number.isSafeInteger(fields.durationMs) && fields.durationMs !== undefined && fields.durationMs >= 0 && fields.durationMs <= 600_000) {
     safe['durationMs'] = fields.durationMs;
+  }
+  if (typeof fields.host === 'string' && fields.host.length <= 255 && /^[A-Za-z0-9.:_-]+$/.test(fields.host)) {
+    safe['host'] = fields.host;
   }
   if (Number.isInteger(fields.port) && fields.port !== undefined && fields.port >= 1 && fields.port <= 65_535) {
     safe['port'] = fields.port;
