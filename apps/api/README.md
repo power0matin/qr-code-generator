@@ -50,8 +50,10 @@ Only PostgreSQL URLs are accepted. The current configuration supports a single `
 Bootstrap is a one-time local/operational command. It is not an HTTP signup endpoint and only succeeds while no bootstrap-owner tenant exists.
 
 ~~~bash
-pnpm --filter @moduqr/api bootstrap -- "My Workspace"
+docker compose --env-file .env.api -f compose.api.yaml run --rm api node dist/bootstrap.js "My Workspace"
 ~~~
+
+This one-off command runs inside the Compose network, uses the API service's private database URL and does not publish a PostgreSQL host port. For a PostgreSQL instance reachable from the host, the equivalent workspace command is `DATABASE_URL=... pnpm --filter @moduqr/api bootstrap -- "My Workspace"`.
 
 The command creates one active tenant and a 90-day owner API key. The full key is printed once to stdout. Store it immediately in a secret manager or another protected location. The database stores only the SHA-256 digest and public lookup prefix; the original secret cannot be retrieved. Do not paste the token into issue trackers, chat, shell history, CI output or logs.
 
