@@ -10,20 +10,11 @@ export function hashIdempotencyRequest(canonicalRequest: string): string {
   return createHash('sha256').update(canonicalRequest, 'utf8').digest('hex');
 }
 
-const forbiddenMetadataFields = new Set([
-  'token',
-  'secret',
-  'password',
-  'authorization',
-  'apikey',
-  'accesstoken',
-  'refreshtoken',
-  'secrethash',
-]);
+const forbiddenMetadataFields = ['token', 'secret', 'password', 'authorization', 'apikey', 'credential', 'bearer'];
 
 export function assertSafeIdempotencyMetadata(metadata: Record<string, unknown>): string {
   const serialized = JSON.stringify(metadata);
-  if (Buffer.byteLength(serialized, 'utf8') > 8_192) {
+  if (Buffer.byteLength(serialized, 'utf8') > 7_168) {
     throw new Error('Idempotency metadata exceeds the 8 KiB limit');
   }
 
@@ -37,7 +28,7 @@ export function assertSafeIdempotencyMetadata(metadata: Record<string, unknown>)
 
     for (const [key, nested] of Object.entries(value)) {
       const normalized = key.toLowerCase().replace(/[^a-z]/g, '');
-      if (forbiddenMetadataFields.has(normalized)) {
+      if (forbiddenMetadataFields.some((field) => normalized.includes(field))) {
         throw new Error('Idempotency metadata must not contain credentials or secrets');
       }
       inspect(nested, depth + 1);
