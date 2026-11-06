@@ -93,7 +93,7 @@ The production web app includes a manifest, install icons, a service worker and 
 
 ```text
 apps/
-  api/               optional Node.js health API and PostgreSQL migrations (Phase 3A)
+  api/               optional Node.js health/key API, PostgreSQL migrations and tenant security (Phase 3A/3B)
   web/               Next.js product UI, IndexedDB, scanner, export orchestration
 packages/
   core/              payload schemas, Smart Detect, encoding boundary
