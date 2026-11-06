@@ -50,11 +50,11 @@ export async function bootstrapTenant(
   tenantName: string,
 ): Promise<{ tenantId: string; tenantName: string; apiKey: IssuedApiKey }> {
   const normalizedName = tenantName.trim();
-  if (
-    normalizedName.length < 1 ||
-    normalizedName.length > 120 ||
-    /[\u0000-\u001f\u007f]/.test(normalizedName)
-  ) {
+  const hasControlCharacter = [...normalizedName].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint < 0x20 || codePoint === 0x7f;
+  });
+  if (normalizedName.length < 1 || normalizedName.length > 120 || hasControlCharacter) {
     throw new Error('Tenant name must contain between 1 and 120 printable characters');
   }
 
