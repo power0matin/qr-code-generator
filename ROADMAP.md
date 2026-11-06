@@ -16,7 +16,7 @@ The Phase 2 acceptance gate passed on 2026-11-06: frozen-lockfile install, lint,
 
 Architecture is documented in docs/architecture/PHASE3-DYNAMIC-PLATFORM.md. Phase 3 is additive: static mode must remain useful without the API or PostgreSQL.
 
-### Phase 3A — API foundation — Implementation prepared for review
+### Phase 3A — API foundation — Completed and merged
 
 - Independent Node.js/TypeScript API workspace.
 - PostgreSQL connection configuration and bounded database-backed readiness.
@@ -27,7 +27,9 @@ Architecture is documented in docs/architecture/PHASE3-DYNAMIC-PLATFORM.md. Phas
 - Unit tests plus a real-PostgreSQL integration gate in CI.
 - Static web build and browser acceptance remain independent of the API.
 
-Acceptance requires a clean frozen install, lint, typecheck, unit tests, production build, PostgreSQL integration tests from an empty database, migration idempotency/checksum verification, container build, and no static-app regression. The implementation is not a dynamic-link product release.
+Phase 3A was merged in [PR #18](https://github.com/power0matin/qr-code-generator/pull/18) on 2026-11-06 (squash commit `493af9e`). The full acceptance gate passed: frozen install, lint, typecheck, unit tests, workspace production build, bundle budget, production dependency audit, release metadata verification, PostgreSQL integration from a fresh service (including migration idempotency and checksum-tamper rejection), production API container build, runtime ESM import smoke test, Compose validation, CodeQL, and the full five-project Playwright matrix. The strict E2E report gate also passed with zero unexpected tests and zero retry-flaky tests. See [CI run #86](https://github.com/power0matin/qr-code-generator/actions/runs/42288196004) and [CodeQL run #95](https://github.com/power0matin/qr-code-generator/actions/runs/42288195937).
+
+Phase 3A is an optional server foundation only. It does not ship tenant authentication, API keys, dynamic link CRUD, public redirects, analytics, a management UI, or a production deployment; those remain subsequent phases.
 
 ### Phase 3B — Tenant and API-key security — Next
 
