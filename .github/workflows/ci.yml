@@ -33,6 +33,8 @@ jobs:
       - run: pnpm build
       - run: pnpm check:bundle
       - run: pnpm audit --prod --audit-level high
+      - name: Verify workspace versions and current release metadata
+        run: pnpm release:verify
 
   e2e:
     runs-on: ubuntu-latest
