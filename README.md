@@ -37,7 +37,7 @@ The second rule is privacy. Static payloads, WiFi credentials, logos, scanned im
 
 ## Designer
 
-The current static studio includes the Phase 1 foundation plus the Phase 2 professional-designer implementation candidate:
+The current static studio includes the Phase 1 foundation and the complete Phase 2 professional-designer feature set:
 
 - URL, text, email, phone, SMS, WhatsApp, WiFi, vCard, geolocation and iCalendar payloads
 - Smart input detection plus editable parsing for structured WiFi, vCard, calendar and messaging payloads
@@ -136,7 +136,7 @@ Set `NEXT_PUBLIC_SITE_URL` to the public HTTPS origin before a production deploy
 
 Vitest covers payloads, v1/v2→v3 project migration/import boundaries, renderer behavior, 60 presets, batch parsing/limits, ZIP generation, design-only sharing, print planning and safety scoring. Playwright covers decode round trips, Phase 2 preset scans, safety simulations/Auto Fix, camera permission handling, batch Worker preparation, export preflight, PWA behavior, accessibility smoke tests, project persistence/history/tags, over-capacity payload handling, RTL/touch behavior and horizontal-overflow checks at 320, 375, 390, 430, 768, 1024, 1280, 1440 and 1920 CSS pixels.
 
-A new visual style is not releaseable merely because it looks good: it must survive automated decode regression coverage.
+A new visual style is not releasable merely because it looks good: it must survive automated decode regression coverage.
 
 ## SEO
 
