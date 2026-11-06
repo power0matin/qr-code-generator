@@ -38,4 +38,10 @@ if (tag !== expectedTag) {
   throw new Error(`Release tag ${tag} does not match root package version ${packageVersion}. Expected ${expectedTag}.`);
 }
 
-process.stdout.write(`Release tag and ${workspaceEntries.length + 1} workspace package versions verified: ${tag}\n`);
+const releaseNotesPath = path.join(repositoryRoot, 'docs', 'releases', `${expectedTag}.md`);
+const releaseNotes = await readFile(releaseNotesPath, 'utf8');
+if (!releaseNotes.startsWith(`# ModuQR ${expectedTag}`) || !releaseNotes.includes('## Validation')) {
+  throw new Error(`Release notes for ${expectedTag} are missing the expected title or validation section: ${releaseNotesPath}`);
+}
+
+process.stdout.write(`Release tag, ${workspaceEntries.length + 1} workspace package versions and release notes verified: ${tag}\n`);
