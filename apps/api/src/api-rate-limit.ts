@@ -17,6 +17,10 @@ export async function consumeApiKeyRateLimit(
   limit = 60,
   now = new Date(),
 ): Promise<ApiRateLimitResult> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 10_000) {
+    throw new Error('API key rate limit is invalid');
+  }
+
   const windowStart = new Date(Math.floor(now.getTime() / 60_000) * 60_000);
   const resetAt = new Date(windowStart.getTime() + 60_000);
   const rows = await database.unsafe(
